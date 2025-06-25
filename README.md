@@ -8,9 +8,11 @@ By GraphGeeks
 
 ----
 
-:spiral_calender: July 16 - 31, 2025
-:location: Virtual
-:writing_hand: [AI Summit Track](https://www.summit.ai/#Tracks)
+:spiral_calendar:  July 16 - 31, 2025
+
+:world_map:        Virtual
+
+:writing_hand:     [AI Summit Track](https://www.summit.ai/#Tracks)
 
 ----
 
