@@ -1,0 +1,10 @@
+services:
+  explorer:
+    container_name: fhir_db
+    image: kuzudb/explorer:0.10.0
+    environment:
+      - MODE=READ_ONLY
+    ports:
+      - 8000:8000
+    volumes:
+      - ./fhir_kuzu_db:/database
