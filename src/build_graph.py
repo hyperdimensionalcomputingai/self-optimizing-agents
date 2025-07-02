@@ -21,6 +21,7 @@ def setup_db() -> kuzu.Connection:
         CREATE NODE TABLE Patient(
             patient_id INT64 PRIMARY KEY,
             prefix STRING,
+            gender_inferred STRING,
             surname STRING,
             givenName STRING,
             birthDate STRING,
@@ -202,8 +203,19 @@ def ingest_patient_nodes(conn: kuzu.Connection, df_patient: pl.DataFrame) -> Non
     res = conn.execute(
         """
         LOAD FROM df_patient
+        WITH *,
+        // Infer gender from gender field or prefix
+        CASE
+            WHEN gender = "male" OR gender = "Male" THEN "M"
+            WHEN gender = "female" OR gender = "Female" THEN "F"
+            WHEN prefix = "Mr." THEN "M"
+            WHEN prefix = "Mrs." OR prefix = "Ms." THEN "F"
+            ELSE NULL
+        END AS gender_inferred
+        // Merge patient node
         MERGE (p:Patient {patient_id: patient_id})
         SET p.prefix = prefix,
+            p.gender_inferred = gender_inferred,
             p.surname = surname,
             p.givenName = givenName,
             p.birthDate = birthDate,
