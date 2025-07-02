@@ -178,3 +178,4 @@ ex_kuzu_db
 baml_client/*
 data/*.parquet
 data/results/*
+fhir_kuzu_db
