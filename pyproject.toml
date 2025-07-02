@@ -1,0 +1,19 @@
+[project]
+name = "odsc-agentic-ai-summit-2025"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "baml-py>=0.90.2",
+    "kuzu>=0.10.1",
+    "polars>=1.31.0",
+    "pyarrow>=20.0.0",
+    "pydantic>=2.11.7",
+    "python-dotenv>=1.1.1",
+]
+
+[dependency-groups]
+dev = [
+    "ipykernel>=6.29.5",
+]
