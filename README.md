@@ -19,6 +19,9 @@ By GraphGeeks
 
 - Python
 - How to use the terminal
+- Basics of Docker
+
+We'll be covering the basics of each of these in the workshop, so no worries if you're not that familiar with them!
 
 ## Instructors
 
@@ -60,3 +63,17 @@ evaluate the agents.
 
 TBD.
 
+## Graph visualization
+
+Once the graph has been created in Kuzu, you can visualize it using the
+[Kuzu Explorer](https://docs.kuzudb.com/visualization/kuzu-explorer/#what-is-kuzu-explorer)tool.
+
+Use the provided `docker-compose.yml` configured with the relative path to your data and start/stop the container as follows:
+
+```bash
+docker compose up
+```
+
+```bash
+docker compose down
+```
