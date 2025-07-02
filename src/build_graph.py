@@ -6,6 +6,7 @@ import kuzu
 import polars as pl
 
 DB_NAME = "fhir_kuzu_db"
+DATA_PATH = "../data/results/extracted_fhir_1_100.jsonl"
 
 
 def setup_db() -> kuzu.Connection:
@@ -74,7 +75,7 @@ def setup_db() -> kuzu.Connection:
     return conn
 
 
-def load_data(path: str = "data/results/extracted_fhir_1_100.jsonl") -> pl.DataFrame:
+def load_data(path: str = DATA_PATH) -> pl.DataFrame:
     return pl.read_ndjson(path)
 
 
@@ -321,7 +322,7 @@ def ingest_immunization_nodes(conn: kuzu.Connection, df_immunization: pl.DataFra
 
 def main() -> None:
     conn = setup_db()
-    df = load_data()
+    df = pl.read_ndjson(DATA_PATH)
     # Prepare DataFrames
     df_address = prep_address_df(df)
     df_patient = prep_patient_df(df)

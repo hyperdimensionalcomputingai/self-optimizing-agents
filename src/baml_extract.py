@@ -1,3 +1,7 @@
+"""
+This script runs the BAML pipeline to extract information from the FHIR unstructured patient notes data
+and outputs the results to newline-delimited JSON files.
+"""
 import asyncio
 import json
 from pathlib import Path
@@ -75,8 +79,8 @@ async def main(fname: str, start: int, end: int) -> None:
 
     results = await extract(records)
     # Output the results to a newline-delimited JSON file
-    Path("data/results").mkdir(parents=True, exist_ok=True)
-    with open(f"data/results/extracted_fhir_{args.start}_{args.end}.jsonl", "w") as f:
+    Path("../data/results").mkdir(parents=True, exist_ok=True)
+    with open(f"../data/results/extracted_fhir_{args.start}_{args.end}.jsonl", "w") as f:
         for result in results:
             f.write(json.dumps(result) + "\n")
 
@@ -87,7 +91,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--start", type=int, default=1, help="Start index")
     parser.add_argument("--end", type=int, default=8, help="End index")
-    parser.add_argument("--fname", type=str, default="data/note.jsonl", help="Input file name")
+    parser.add_argument("--fname", type=str, default="../data/note.jsonl", help="Input file name")
     args = parser.parse_args()
     if args.start < 1:
         raise ValueError("Start index must be 1 or greater")

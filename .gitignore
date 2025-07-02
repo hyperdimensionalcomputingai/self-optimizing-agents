@@ -174,8 +174,7 @@ cython_debug/
 .vscode
 
 # Custom
-ex_kuzu_db
-baml_client/*
+src/baml_client/*
 data/*.parquet
 data/results/*
-fhir_kuzu_db
+src/fhir_kuzu_db
