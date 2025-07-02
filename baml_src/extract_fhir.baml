@@ -149,6 +149,7 @@ test ExtractPatient1 {
   @@assert({{ "Fernando" in this.name.given }})
   @@assert({{ "Amos" in this.name.given }})
   @@assert({{ this.maritalStatus == "Married" }})
+  @@assert({{ this.birthDate == none }})
 }
 
 test ExtractPatient2 {
