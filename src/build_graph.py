@@ -158,15 +158,12 @@ def prep_immunization_df(df: pl.DataFrame) -> pl.DataFrame:
     df_immunization = (
         df.select("record_id", "immunization")
         .unnest("immunization")
-        .filter(
-            pl.col("vaccine_traits").is_not_null()
-            & pl.col("status").is_not_null()
-            & pl.col("occurrenceDateTime").is_not_null()
-        )
         .with_columns(
             pl.col("vaccine_traits").list.join(separator=", ").alias("traits"),
             pl.col("occurrenceDateTime").str.to_lowercase().alias("occurrenceDateTime"),
         )
+        # Only filter out rows where ALL values related to immunization are null
+        .filter(~pl.all_horizontal(pl.col(["status", "occurrenceDateTime", "traits"]).is_null()))
         .select(
             pl.col("record_id"),
             pl.col("status").str.to_lowercase(),
@@ -262,7 +259,6 @@ def ingest_treats(conn: kuzu.Connection, df_practitioner: pl.DataFrame) -> None:
     res = conn.execute(
         """
         LOAD FROM df_practitioner
-        WHERE id IS NOT NULL AND record_id IS NOT NULL
         WITH DISTINCT record_id AS patient_id, id
         MATCH (p1:Patient {patient_id: patient_id}), (p2:Practitioner {id: id})
         MERGE (p2)-[:TREATS]->(p1)
@@ -303,7 +299,6 @@ def ingest_experiences(conn: kuzu.Connection, df_substance: pl.DataFrame) -> Non
     res = conn.execute(
         """
         LOAD FROM df_substance
-        WHERE id IS NOT NULL AND record_id IS NOT NULL
         WITH DISTINCT record_id AS patient_id, id
         MATCH (p:Patient {patient_id: patient_id}), (a:Allergy {id: id})
         MERGE (p)-[:EXPERIENCES]->(a)
@@ -317,7 +312,6 @@ def ingest_immunization_nodes(conn: kuzu.Connection, df_immunization: pl.DataFra
     res = conn.execute(
         """
         LOAD FROM df_immunization
-        WHERE status IS NOT NULL AND occurrenceDateTime IS NOT NULL AND traits IS NOT NULL
         MERGE (i:Immunization {id: record_id})
         SET i.status = status,
             i.occurrenceDateTime = occurrenceDateTime,
