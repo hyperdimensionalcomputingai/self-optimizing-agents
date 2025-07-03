@@ -331,6 +331,19 @@ def ingest_experiences_allergy(conn: kuzu.Connection, df_substance: pl.DataFrame
     print(res.get_as_pl())  # type: ignore
 
 
+def ingest_causes_allergy(conn: kuzu.Connection, df_substance: pl.DataFrame) -> None:
+    res = conn.execute(
+        """
+        LOAD FROM df_substance
+        WHERE name IS NOT NULL
+        MATCH (s:Substance {name: name}), (a:Allergy {id: id})
+        MERGE (s)-[:CAUSES]->(a)
+        RETURN COUNT(*) AS num_causes_allergy
+        """
+    )
+    print(res.get_as_pl())  # type: ignore
+
+
 def ingest_has_immunization(conn: kuzu.Connection, df_immunization: pl.DataFrame) -> None:
     res = conn.execute(
         """
@@ -363,6 +376,7 @@ def main() -> None:
     ingest_lives_in(conn, df_address)
     ingest_treats(conn, df_practitioner)
     ingest_experiences_allergy(conn, df_substance)
+    ingest_causes_allergy(conn, df_substance)
     ingest_has_immunization(conn, df_immunization)
 
 
