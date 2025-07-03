@@ -2,6 +2,7 @@
 This script runs the BAML pipeline to extract information from the FHIR unstructured patient notes data
 and outputs the results to newline-delimited JSON files.
 """
+
 import asyncio
 import json
 from pathlib import Path
