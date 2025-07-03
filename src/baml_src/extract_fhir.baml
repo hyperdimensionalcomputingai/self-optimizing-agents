@@ -1,7 +1,7 @@
 class PatientName {
     family string?  @description("Surname of the patient")
     given string[]?  @description("Given name(s) of the patient")
-    prefix string?  @description("Prefix of the patient name")
+    prefix string?  @description("Mr., Mrs., Ms., Dr., etc.")
 }
 
 // Need a separate class for practitioner name because it confuse the model when
@@ -9,14 +9,13 @@ class PatientName {
 class PractitionerName {
     family string?  @description("Surname of the practitioner")
     given string[]?  @description("Given name(s) of the practitioner")
-    prefix string?  @description("Prefix of the practitioner name")
+    prefix string?  @description("Mr., Mrs., Ms., Dr., etc.")
 }
 
 enum MaritalStatus {
     Married
     Single
     Divorced
-    Widowed
     NeverMarried
 }
 
@@ -41,14 +40,13 @@ class HealthcareProviderAddress {
 class Patient {
   name PatientName
   age int?
-  gender string?
+  gender "Male" | "Female" | null
   birthDate string?  @description("Date of birth of the patient in ISO-8601 format")
   address HomeAddress | null  @description("Residence address of the patient")
   phone string?
   email string?
   maritalStatus MaritalStatus | null
   primaryLanguage "English" | "Spanish" | null
-  multipleBirthBoolean bool?  @alias("isMultipleBirth")
 }
 
 class Practitioner {
