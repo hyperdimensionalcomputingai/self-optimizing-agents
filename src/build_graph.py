@@ -76,10 +76,6 @@ def setup_db() -> kuzu.Connection:
     return conn
 
 
-def load_data(path: str = DATA_PATH) -> pl.DataFrame:
-    return pl.read_ndjson(path)
-
-
 def prep_address_df(df: pl.DataFrame) -> pl.DataFrame:
     df_address = df.select("record_id", "address").unnest("address")
     df_address = df_address.with_columns(
