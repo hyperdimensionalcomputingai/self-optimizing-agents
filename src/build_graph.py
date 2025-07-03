@@ -158,17 +158,22 @@ def prep_immunization_df(df: pl.DataFrame) -> pl.DataFrame:
     df_immunization = (
         df.select("record_id", "immunization")
         .unnest("immunization")
-        .filter(
-            pl.col("vaccine_traits").is_not_null()
-            & pl.col("status").is_not_null()
-            & pl.col("occurrenceDateTime").is_not_null()
-        )
         .with_columns(
             pl.col("vaccine_traits").list.join(separator=", ").alias("traits"),
             pl.col("occurrenceDateTime").str.to_lowercase().alias("occurrenceDateTime"),
+            pl.concat_str(
+                [
+                    pl.col("record_id"),
+                    pl.coalesce(pl.col("status"), pl.lit("unknown")).str.to_lowercase(),
+                ],
+                separator="_",
+            ).alias("id"),
         )
+        # Only filter out rows where ALL values related to immunization are null
+        .filter(~pl.all_horizontal(pl.col(["status", "occurrenceDateTime", "traits"]).is_null()))
         .select(
             pl.col("record_id"),
+            pl.col("id"),
             pl.col("status").str.to_lowercase(),
             pl.col("occurrenceDateTime"),
             pl.col("traits").str.to_lowercase(),
@@ -262,7 +267,6 @@ def ingest_treats(conn: kuzu.Connection, df_practitioner: pl.DataFrame) -> None:
     res = conn.execute(
         """
         LOAD FROM df_practitioner
-        WHERE id IS NOT NULL AND record_id IS NOT NULL
         WITH DISTINCT record_id AS patient_id, id
         MATCH (p1:Patient {patient_id: patient_id}), (p2:Practitioner {id: id})
         MERGE (p2)-[:TREATS]->(p1)
@@ -299,11 +303,25 @@ def ingest_allergy_nodes(conn: kuzu.Connection, df_substance: pl.DataFrame) -> N
     print(res.get_as_pl())  # type: ignore
 
 
-def ingest_experiences(conn: kuzu.Connection, df_substance: pl.DataFrame) -> None:
+def ingest_immunization_nodes(conn: kuzu.Connection, df_immunization: pl.DataFrame) -> None:
+    res = conn.execute(
+        """
+        LOAD FROM df_immunization
+        MERGE (i:Immunization {id: id})
+        SET i.status = status,
+            i.occurrenceDateTime = occurrenceDateTime,
+            i.traits = traits
+        RETURN COUNT(*) AS num_immunizations
+        """
+    )
+    print(res.get_as_pl())  # type: ignore  # type: ignore
+
+
+
+def ingest_experiences_allergy(conn: kuzu.Connection, df_substance: pl.DataFrame) -> None:
     res = conn.execute(
         """
         LOAD FROM df_substance
-        WHERE id IS NOT NULL AND record_id IS NOT NULL
         WITH DISTINCT record_id AS patient_id, id
         MATCH (p:Patient {patient_id: patient_id}), (a:Allergy {id: id})
         MERGE (p)-[:EXPERIENCES]->(a)
@@ -313,19 +331,29 @@ def ingest_experiences(conn: kuzu.Connection, df_substance: pl.DataFrame) -> Non
     print(res.get_as_pl())  # type: ignore
 
 
-def ingest_immunization_nodes(conn: kuzu.Connection, df_immunization: pl.DataFrame) -> None:
+def ingest_causes_allergy(conn: kuzu.Connection, df_substance: pl.DataFrame) -> None:
+    res = conn.execute(
+        """
+        LOAD FROM df_substance
+        WHERE name IS NOT NULL
+        MATCH (s:Substance {name: name}), (a:Allergy {id: id})
+        MERGE (s)-[:CAUSES]->(a)
+        RETURN COUNT(*) AS num_causes_allergy
+        """
+    )
+    print(res.get_as_pl())  # type: ignore
+
+
+def ingest_has_immunization(conn: kuzu.Connection, df_immunization: pl.DataFrame) -> None:
     res = conn.execute(
         """
         LOAD FROM df_immunization
-        WHERE status IS NOT NULL AND occurrenceDateTime IS NOT NULL AND traits IS NOT NULL
-        MERGE (i:Immunization {id: record_id})
-        SET i.status = status,
-            i.occurrenceDateTime = occurrenceDateTime,
-            i.traits = traits
-        RETURN COUNT(*) AS num_immunizations
+        MATCH (p:Patient {patient_id: record_id}), (i:Immunization {id: id})
+        MERGE (p)-[:HAS_IMMUNIZATION]->(i)
+        RETURN COUNT(*) AS num_has_immunizations
         """
     )
-    print(res.get_as_pl())  # type: ignore  # type: ignore
+    print(res.get_as_pl())  # type: ignore
 
 
 def main() -> None:
@@ -347,7 +375,9 @@ def main() -> None:
     # Ingest relationships
     ingest_lives_in(conn, df_address)
     ingest_treats(conn, df_practitioner)
-    ingest_experiences(conn, df_substance)
+    ingest_experiences_allergy(conn, df_substance)
+    ingest_causes_allergy(conn, df_substance)
+    ingest_has_immunization(conn, df_immunization)
 
 
 if __name__ == "__main__":
