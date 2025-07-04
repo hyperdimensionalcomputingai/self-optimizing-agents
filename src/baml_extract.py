@@ -5,17 +5,18 @@ and outputs the results to newline-delimited JSON files.
 
 import asyncio
 import json
+import os
 from pathlib import Path
 from typing import Any, Dict, List
 
 import polars as pl
 from dotenv import load_dotenv
 
+os.environ["BAML_LOG"] = "WARN"
+
 from baml_client import b
-from baml_client.config import set_log_level
 
 load_dotenv()
-set_log_level("WARN")
 
 
 async def extract_patient(record: Dict[str, str]) -> Dict[str, Any]:
