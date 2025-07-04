@@ -86,10 +86,11 @@ function ExtractPractitioner(record: string) -> Practitioner {
   "#
 }
 
-function ExtractImmunization(record: string) -> Immunization {
+function ExtractImmunization(record: string) -> Immunization[] {
   client OpenRouterGoogleGemini2Flash
   prompt #"
     Extract details about any immunizations the patient has received.
+    If the patient has received a vaccine, consider its status as completed.
     Use ONLY the information provided in the note.
 
     {{ ctx.output_format }}
@@ -202,11 +203,11 @@ test ExtractImmunization1 {
   functions [ExtractImmunization]
   args {
     record #"
-    A clinical note for Ms. Sonia María Bañuelos: \n\nOn December 24, 2013, at 16:59:45 GMT+1, Ms. Bañuelos received an injectable, preservative-free, seasonal influenza vaccine. This immunization procedure was completed smoothly. \n\nRegarding her personal information, Ms. Bañuelos, identifies as female and is not a multiple birth individual, meaning she doesn't have any twins or triplets. Her official residence is listed as 130 Rempel Vale, Boston, Massachusetts, 02111, United States. Moreover, it's noted that her primary language is Spanish. Hence, all communication with her should ideally be in Spanish for ensuring comprehension.\n\n\n
+    A clinical note for Ms. Sonia María Bañuelos: \n\nOn December 24, 2013, at 16:59:45 GMT+1, Ms. Bañuelos received an injectable, preservative-free, seasonal influenza vaccine. This immunization procedure was completed smoothly. \n\nRegarding her personal information, Ms. Bañuelos, identifies as female and is not a multiple birth individual, meaning she doesn't have any twins or triplets. The patient also received a chicken pox vaccine on Jan 23rd, 2014. Her official residence is listed as 130 Rempel Vale, Boston, Massachusetts, 02111, United States. Moreover, it's noted that her primary language is Spanish. Hence, all communication with her should ideally be in Spanish for ensuring comprehension.\n\n\n
     "#
   }
-  @@assert(occurrence_date_time, {{ this.occurrenceDateTime == "2013-12-24T16:59:45+01:00" }})
-  @@assert(status, {{ this.status == "completed" }})
+  @@assert(occurrence_date_time, {{ this[0].occurrenceDateTime == "2013-12-24T16:59:45+01:00" }})
+  @@assert(status, {{ this[0].status == "completed" }})
 }
 
 test ExtractAllergy1 {
@@ -217,6 +218,7 @@ test ExtractAllergy1 {
     "#
   }
   @@assert(substance_category, {{ this.substance[0].category == "environment" }})
+  @@assert(substance_name, {{ this.substance[0].name == none }})
 }
 
 test ExtractAllergy2 {
