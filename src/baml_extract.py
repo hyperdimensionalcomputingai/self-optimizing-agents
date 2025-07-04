@@ -94,9 +94,9 @@ if __name__ == "__main__":
     parser.add_argument("--start", type=int, default=1, help="Start index")
     parser.add_argument("--end", type=int, default=8, help="End index")
     parser.add_argument("--fname", type=str, default="../data/note.jsonl", help="Input file name")
+    parser.add_argument("--output", type=str, default="../data/results/extracted_fhir.jsonl", help="Output file name")
     args = parser.parse_args()
     if args.start < 1:
         raise ValueError("Start index must be 1 or greater")
 
-    # None for end means process till the end
     asyncio.run(main(args.fname, start=args.start, end=args.end))
