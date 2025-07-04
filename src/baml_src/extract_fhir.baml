@@ -1,35 +1,17 @@
-class PatientName {
-    family string?  @description("Surname of the patient")
-    given string[]?  @description("Given name(s) of the patient")
-    prefix string?  @description("Mr., Mrs., Ms., Dr., etc.")
-}
-
-// Need a separate class for practitioner name because it confuse the model when
-// the patient name and practitioner name are in the same report.
-class PractitionerName {
-    family string?  @description("Surname of the practitioner")
-    given string[]?  @description("Given name(s) of the practitioner")
-    prefix string?  @description("Mr., Mrs., Ms., Dr., etc.")
+class PersonNameAndTitle {
+    family string? @alias("surname") @description("Surname of the patient")
+    given string[]? @alias("givenName") @description("Given name(s) of the patient")
+    prefix string? @alias("title") @description("Title of the patient")
 }
 
 enum MaritalStatus {
     Married
-    Single
     Divorced
+    Widowed
     NeverMarried
 }
 
-class HomeAddress {
-    line string
-    city string
-    state string
-    postalCode string?
-    country "US" | null
-}
-
-// Need a separate class for healthcare provider address because it confuse the model when
-// the patient address and healthcare provider address are in the same report.
-class HealthcareProviderAddress {
+class Address {
     line string
     city string
     state string
@@ -38,11 +20,11 @@ class HealthcareProviderAddress {
 }
 
 class Patient {
-  name PatientName
+  name PersonNameAndTitle | null @alias("patientNameAndTitle")
   age int?
   gender "Male" | "Female" | null
   birthDate string?  @description("Date of birth of the patient in ISO-8601 format")
-  address HomeAddress | null  @description("Residence address of the patient")
+  address Address | null @alias("homeAddress")  @description("Residence address of the patient")
   phone string?
   email string?
   maritalStatus MaritalStatus | null
@@ -50,14 +32,14 @@ class Patient {
 }
 
 class Practitioner {
-  name PractitionerName
-  address HealthcareProviderAddress | null
+  name PersonNameAndTitle | null @alias("practitionerNameAndTitle")
+  address Address | null @alias("practitionerAddress")
   phone string?
   email string?
 }
 
 class Immunization {
-    vaccine_traits string[]?  @description("Text describing the name and traits of the immunization")
+    traits string[]? @alias("vaccineTraits") @description("Text describing the name and traits of the immunization")
     status "completed" | null
     occurrenceDateTime string?  @description("ISO-8601 format for datetime including timezone")
 }
@@ -76,33 +58,31 @@ class Allergy {
 
 function ExtractPatient(record: string) -> Patient {
   client OpenRouterGoogleGemini2Flash
-// client OpenRouterGPT4o
   prompt #"
     Extract the patient information using ONLY the information provided in the note.
 
     For address fields, be careful. Check whether the address is for the patient or for the healthcare provider.
+    
+    {{ ctx.output_format }}
 
     {{ _.role('user') }}
 
     {{ record }}
-
-    {{ ctx.output_format }}
   "#
 }
 
 function ExtractPractitioner(record: string) -> Practitioner {
   client OpenRouterGoogleGemini2Flash
-//   client OpenRouterGPT4o
   prompt #"
     Extract the healthcare provider's practitioner information using ONLY the information provided in the note.
 
     For address fields, be careful. Check whether the address is for the patient or for the healthcare provider.
 
+    {{ ctx.output_format }}
+
     {{ _.role('user') }}
 
     {{ record }}
-
-    {{ ctx.output_format }}
   "#
 }
 
@@ -112,11 +92,11 @@ function ExtractImmunization(record: string) -> Immunization {
     Extract details about any immunizations the patient has received.
     Use ONLY the information provided in the note.
 
+    {{ ctx.output_format }}
+
     {{ _.role('user') }}
 
     {{ record }}
-
-    {{ ctx.output_format }}
   "#
 }
 
@@ -126,11 +106,10 @@ function ExtractAllergy(record: string) -> Allergy {
     Extract details about any allergies or intolerances the patient has.
     Use ONLY the information provided in the note.
 
+    {{ ctx.output_format }}
     {{ _.role('user') }}
 
     {{ record }}
-
-    {{ ctx.output_format }}
     "#
 }
 
@@ -146,6 +125,7 @@ test ExtractPatient1 {
   @@assert({{ this.name.family == "Breitenberg" }})
   @@assert({{ "Fernando" in this.name.given }})
   @@assert({{ "Amos" in this.name.given }})
+  @@assert({{ this.name.prefix == "Mr." }})
   @@assert({{ this.maritalStatus == "Married" }})
   @@assert({{ this.birthDate == none }})
 }
@@ -159,6 +139,7 @@ test ExtractPatient2 {
   }
   @@assert({{ this.name.family == "Rodríguez" }})
   @@assert({{ "Marisol" in this.name.given }})
+  @@assert({{ this.name.prefix == "Ms." }})
   @@assert({{ this.birthDate == "1995-12-01" }})
   @@assert({{ this.address.line == "547 Effertz Extension Unit 28" }})
   @@assert({{ this.address.city == "East Longmeadow" }})
@@ -180,6 +161,7 @@ test ExtractPatient3 {
   @@assert({{ this.name.family == "Durgan" }})
   @@assert({{ "Azucena" in this.name.given }})
   @@assert({{ "Lore" in this.name.given }})
+  @@assert({{ this.name.prefix == none }})
   @@assert({{ this.gender == "Female" }})
   @@assert({{ this.birthDate == "2008-10-20" }})
   @@assert({{ this.maritalStatus == "NeverMarried" }})

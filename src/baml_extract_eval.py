@@ -1,7 +1,8 @@
+import argparse
 import json
-import re
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from textwrap import dedent
+from typing import Any, Dict, List, Optional
 
 
 @dataclass
@@ -73,7 +74,11 @@ def compare_substring(a, b):
 
 def normalize_fhir_name(fhir_name_array):
     name = get_first(fhir_name_array) or {}
-    return {"family": name.get("family"), "given": name.get("given", []), "prefix": get_first(name.get("prefix", []))}
+    return {
+        "family": name.get("family"),
+        "given": name.get("given", []),
+        "prefix": get_first(name.get("prefix", [])),
+    }
 
 
 def normalize_fhir_address(fhir_address_array):
@@ -97,18 +102,6 @@ def normalize_fhir_marital_status(fhir_marital_status):
     if coding:
         return coding[0].get("display", "").replace(" ", "")
     return None
-
-
-def normalize_fhir_language(fhir_communication_array):
-    comm = get_first(fhir_communication_array) or {}
-    lang = comm.get("language", {})
-    text = lang.get("text")
-    if text:
-        return text
-    coding = lang.get("coding", [])
-    if coding:
-        return coding[0].get("display", "")
-    return ""
 
 
 def combine_practitioner_name(practitioner_data: Dict[str, Any]) -> str:
@@ -254,7 +247,20 @@ def extract_all_practitioners_from_bundle(bundle: Dict[str, Any]) -> list:
     return list(practitioners)
 
 
-def evaluate_fields(eval_file_path: str, results_file_path: str, field_map: Dict[str, Dict[str, Any]]):
+def read_n_lines(file_path: str, n: int) -> list:
+    """Read up to n lines from a file and return as a list."""
+    lines = []
+    with open(file_path, "r") as f:
+        for i, line in enumerate(f):
+            if i >= n:
+                break
+            lines.append(line)
+    return lines
+
+
+def evaluate_fields(
+    eval_file_path: str, results_file_path: str, field_map: Dict[str, Dict[str, Any]]
+):
     """
     field_map: {
         field_name: {
@@ -269,29 +275,35 @@ def evaluate_fields(eval_file_path: str, results_file_path: str, field_map: Dict
     failed_records = {k: [] for k in field_map}
     total_field_comparisons = 0
     total_failed_comparisons = 0
-    with open(eval_file_path, "r") as eval_file, open(results_file_path, "r") as results_file:
-        for line_num, (eval_line, results_line) in enumerate(zip(eval_file, results_file), 1):
-            eval_data = json.loads(eval_line.strip())
-            results_data = json.loads(results_line.strip())
-            fhir_bundle = parse_fhir_bundle(eval_data["fhir"])
-            patient = extract_patient_from_bundle(fhir_bundle)
-            if not patient:
-                continue
-            for field, ops in field_map.items():
-                total_field_comparisons += 1
-                if field.startswith("practitioner") or field.startswith("allergy") or field.startswith("immunization"):
-                    # For practitioner, allergy, and immunization fields, use bundle data
-                    fhir_val = ops["extract_fhir"](fhir_bundle)
-                else:
-                    # For patient fields, use patient data
-                    fhir_val = ops["extract_fhir"](patient)
-                result_val = ops["extract_result"](results_data)
-                if ops["compare"](result_val, fhir_val):
-                    stats[field] += 1
-                else:
-                    failed_records[field].append(line_num)
-                    total_failed_comparisons += 1
-            total += 1
+    with open(results_file_path, "r") as results_file:
+        results_lines = list(results_file)
+    eval_lines = read_n_lines(eval_file_path, len(results_lines))
+    for line_num, (eval_line, results_line) in enumerate(zip(eval_lines, results_lines), 1):
+        eval_data = json.loads(eval_line.strip())
+        results_data = json.loads(results_line.strip())
+        fhir_bundle = parse_fhir_bundle(eval_data["fhir"])
+        patient = extract_patient_from_bundle(fhir_bundle)
+        if not patient:
+            continue
+        for field, ops in field_map.items():
+            total_field_comparisons += 1
+            if (
+                field.startswith("practitioner")
+                or field.startswith("allergy")
+                or field.startswith("immunization")
+            ):
+                # For practitioner, allergy, and immunization fields, use bundle data
+                fhir_val = ops["extract_fhir"](fhir_bundle)
+            else:
+                # For patient fields, use patient data
+                fhir_val = ops["extract_fhir"](patient)
+            result_val = ops["extract_result"](results_data)
+            if ops["compare"](result_val, fhir_val):
+                stats[field] += 1
+            else:
+                failed_records[field].append(line_num)
+                total_failed_comparisons += 1
+        total += 1
     return stats, total, failed_records, total_field_comparisons, total_failed_comparisons
 
 
@@ -331,12 +343,16 @@ FIELD_MAP = {
     },
     "postalCode": {
         "extract_fhir": lambda p: normalize_fhir_address(p.get("address", []))["postalCode"],
-        "extract_result": lambda r: r.get("address", {}).get("postalCode") if r.get("address") else None,
+        "extract_result": lambda r: r.get("address", {}).get("postalCode")
+        if r.get("address")
+        else None,
         "compare": compare_strict,
     },
     "country": {
         "extract_fhir": lambda p: normalize_fhir_address(p.get("address", []))["country"],
-        "extract_result": lambda r: r.get("address", {}).get("country") if r.get("address") else None,
+        "extract_result": lambda r: r.get("address", {}).get("country")
+        if r.get("address")
+        else None,
         "compare": compare_strict,
     },
     # Simple fields
@@ -364,7 +380,8 @@ FIELD_MAP = {
         "compare": lambda result, fhir_list: (
             result in fhir_list
             if fhir_list and result
-            else (result is None or result == "") and (not fhir_list or all(not item for item in fhir_list))
+            else (result is None or result == "")
+            and (not fhir_list or all(not item for item in fhir_list))
         ),
     },
     # Allergy fields
@@ -378,7 +395,9 @@ FIELD_MAP = {
     # Immunization fields
     "immunizationCount": {
         "extract_fhir": extract_immunization_count_from_bundle,
-        "extract_result": lambda r: 1 if r.get("immunization") else 0,  # Results only have one immunization per patient
+        "extract_result": lambda r: 1
+        if r.get("immunization")
+        else 0,  # Results only have one immunization per patient
         "compare": compare_strict,
     },
     "immunizationStatus": {
@@ -389,7 +408,8 @@ FIELD_MAP = {
         "compare": lambda result, fhir_list: (
             result[0] in fhir_list
             if result and fhir_list
-            else (not result or not result[0]) and (not fhir_list or all(not item for item in fhir_list))
+            else (not result or not result[0])
+            and (not fhir_list or all(not item for item in fhir_list))
         ),
     },
     "immunizationDate": {
@@ -400,14 +420,17 @@ FIELD_MAP = {
         "compare": lambda result, fhir_list: (
             result[0] in fhir_list
             if result and fhir_list
-            else (not result or not result[0]) and (not fhir_list or all(not item for item in fhir_list))
+            else (not result or not result[0])
+            and (not fhir_list or all(not item for item in fhir_list))
         ),
     },
 }
 
 
 # --- Reporting ---
-def print_field_stats(stats, total, failed_records, total_field_comparisons, total_failed_comparisons):
+def print_field_stats(
+    stats, total, failed_records, total_field_comparisons, total_failed_comparisons
+):
     print("=== INFORMATION EXTRACTION EVALUATION RESULTS ===\n")
     print(f"Total Records: {total}")
     for field, count in stats.items():
@@ -418,16 +441,38 @@ def print_field_stats(stats, total, failed_records, total_field_comparisons, tot
 
     total_passed_comparisons = total_field_comparisons - total_failed_comparisons
     print(
-        f"\nOverall accuracy (across all fields): {total_passed_comparisons}/{total_field_comparisons} ({total_passed_comparisons/total_field_comparisons*100:.1f}%)"
+        dedent(
+            f"""
+        Overall accuracy (across all fields):
+        {total_passed_comparisons}/{total_field_comparisons} ({total_passed_comparisons/total_field_comparisons*100:.1f}%)
+        """
+        )
     )
     print(f"Total comparisons: {total_field_comparisons}")
     print(f"Failed comparisons: {total_failed_comparisons}")
 
 
 if __name__ == "__main__":
-    eval_file = "../data/fhir_1_100.jsonl"
-    results_file = "../data/results/extracted_fhir_1_100.jsonl"
-    stats, total, failed_records, total_field_comparisons, total_failed_comparisons = evaluate_fields(
-        eval_file, results_file, FIELD_MAP
+    parser = argparse.ArgumentParser(description="Evaluate FHIR extraction results.")
+    parser.add_argument(
+        "--eval_file",
+        "-e",
+        type=str,
+        default="../data/fhir.jsonl",
+        help="Path to the evaluation (gold standard) file.",
     )
-    print_field_stats(stats, total, failed_records, total_field_comparisons, total_failed_comparisons)
+    parser.add_argument(
+        "--results_file",
+        "-r",
+        type=str,
+        default="../data/results/extracted_fhir.jsonl",
+        help="Path to the results file.",
+    )
+    args = parser.parse_args()
+
+    stats, total, failed_records, total_field_comparisons, total_failed_comparisons = (
+        evaluate_fields(args.eval_file, args.results_file, FIELD_MAP)
+    )
+    print_field_stats(
+        stats, total, failed_records, total_field_comparisons, total_failed_comparisons
+    )

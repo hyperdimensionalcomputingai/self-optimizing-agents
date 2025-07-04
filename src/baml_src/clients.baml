@@ -14,12 +14,12 @@ client<llm> OpenRouterGPT4oMini {
   }
 }
 
-client<llm> OpenRouterGPT4o {
+client<llm> OpenRouterGPT41Nano {
   provider "openai-generic"
   options {
     base_url "https://openrouter.ai/api/v1"
     api_key env.OPENROUTER_API_KEY
-    model "openai/gpt-4o"
+    model "openai/gpt-4.1-nano"
     temperature 0.1
     headers {
       "HTTP-Referer" "https://kuzudb.com" // Optional
@@ -42,12 +42,12 @@ client<llm> OpenRouterGPT41 {
   }
 }
 
-client<llm> OpenRouterGoogleGemini25Flash {
+client<llm> OpenRouterGoogleGemini25FlashLite {
   provider "openai-generic"
   options {
     base_url "https://openrouter.ai/api/v1"
     api_key env.OPENROUTER_API_KEY
-    model "google/gemini-2.5-flash"
+    model "google/gemini-2.5-flash-lite-preview-06-17"
     headers {
       "HTTP-Referer" "https://kuzudb.com" // Optional
       "X-Title" "Graph RAG" // Optional
