@@ -57,7 +57,7 @@ class Allergy {
 // --- Functions ---
 
 function ExtractPatient(record: string) -> Patient {
-  client OpenRouterGPT41Nano
+  client OpenRouterGoogleGemini2Flash
   prompt #"
     Extract the patient information using ONLY the information provided in the note.
 
