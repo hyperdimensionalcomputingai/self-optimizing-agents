@@ -395,16 +395,12 @@ FIELD_MAP = {
     # Immunization fields
     "immunizationCount": {
         "extract_fhir": extract_immunization_count_from_bundle,
-        "extract_result": lambda r: 1
-        if r.get("immunization")
-        else 0,  # Results only have one immunization per patient
+        "extract_result": lambda r: len(r.get("immunization", [])),
         "compare": compare_strict,
     },
     "immunizationStatus": {
         "extract_fhir": extract_immunization_status_from_bundle,
-        "extract_result": lambda r: [r.get("immunization", {}).get("status")]
-        if r.get("immunization", {}).get("status")
-        else [],
+        "extract_result": lambda r: [imm.get("status") for imm in r.get("immunization", []) if imm.get("status")],
         "compare": lambda result, fhir_list: (
             result[0] in fhir_list
             if result and fhir_list
@@ -414,9 +410,11 @@ FIELD_MAP = {
     },
     "immunizationDate": {
         "extract_fhir": extract_immunization_dates_from_bundle,
-        "extract_result": lambda r: [r.get("immunization", {}).get("occurrenceDateTime")]
-        if r.get("immunization", {}).get("occurrenceDateTime")
-        else [],
+        "extract_result": lambda r: [
+            imm.get("occurrenceDateTime") or imm.get("occurrenceString")
+            for imm in r.get("immunization", [])
+            if imm.get("occurrenceDateTime") or imm.get("occurrenceString")
+        ],
         "compare": lambda result, fhir_list: (
             result[0] in fhir_list
             if result and fhir_list

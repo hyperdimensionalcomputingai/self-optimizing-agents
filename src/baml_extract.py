@@ -36,9 +36,9 @@ async def extract_practitioner(record: Dict[str, str]) -> Dict[str, Any]:
     return output
 
 
-async def extract_immunization(record: Dict[str, str]) -> Dict[str, Any]:
+async def extract_immunization(record: Dict[str, str]) -> List[Dict[str, Any]]:
     immunization = b.ExtractImmunization(record["note"])
-    output = immunization.model_dump()
+    output = [i.model_dump() for i in immunization]
     print(f"Extracted immunization for {record['record_id']}")
     return output
 
@@ -59,7 +59,7 @@ async def process_record(record: Dict[str, str]) -> Dict[str, Any]:
         patient_result["practitioner"] = practitioner_result
     # Immunization
     immunization_result = await extract_immunization(record)
-    if not all(v is None for v in immunization_result.values()):
+    if not all(v is None for v in immunization_result):
         patient_result["immunization"] = immunization_result
     # Allergy
     allergy_result = await extract_allergy(record)
