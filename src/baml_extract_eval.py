@@ -1,8 +1,71 @@
+"""
+Script to evaluate the accuracy of the FHIR extraction results.
+
+Results from BAML: ../data/results/extracted_fhir.json
+Gold standard: ../data/fhir.json
+
+The script assumes that the results from the gold standard are in the same order as the results from BAML.
+"""
+
 import argparse
 import json
 from dataclasses import dataclass
 from textwrap import dedent
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
+
+# Add a mapping of state abbreviations to full state names
+STATE_ABBR_TO_NAME = {
+    "AL": "Alabama",
+    "AK": "Alaska",
+    "AZ": "Arizona",
+    "AR": "Arkansas",
+    "CA": "California",
+    "CO": "Colorado",
+    "CT": "Connecticut",
+    "DE": "Delaware",
+    "FL": "Florida",
+    "GA": "Georgia",
+    "HI": "Hawaii",
+    "ID": "Idaho",
+    "IL": "Illinois",
+    "IN": "Indiana",
+    "IA": "Iowa",
+    "KS": "Kansas",
+    "KY": "Kentucky",
+    "LA": "Louisiana",
+    "ME": "Maine",
+    "MD": "Maryland",
+    "MA": "Massachusetts",
+    "MI": "Michigan",
+    "MN": "Minnesota",
+    "MS": "Mississippi",
+    "MO": "Missouri",
+    "MT": "Montana",
+    "NE": "Nebraska",
+    "NV": "Nevada",
+    "NH": "New Hampshire",
+    "NJ": "New Jersey",
+    "NM": "New Mexico",
+    "NY": "New York",
+    "NC": "North Carolina",
+    "ND": "North Dakota",
+    "OH": "Ohio",
+    "OK": "Oklahoma",
+    "OR": "Oregon",
+    "PA": "Pennsylvania",
+    "RI": "Rhode Island",
+    "SC": "South Carolina",
+    "SD": "South Dakota",
+    "TN": "Tennessee",
+    "TX": "Texas",
+    "UT": "Utah",
+    "VT": "Vermont",
+    "VA": "Virginia",
+    "WA": "Washington",
+    "WV": "West Virginia",
+    "WI": "Wisconsin",
+    "WY": "Wyoming",
+}
 
 
 @dataclass
@@ -41,13 +104,13 @@ class SimpleFieldComparison:
 
 
 # --- Utility Functions ---
-def get_first(arr):
+def get_first(arr) -> Any:
     if isinstance(arr, list) and arr:
         return arr[0]
     return None
 
 
-def normalize_str(val):
+def normalize_str(val) -> Optional[str]:
     if val is None:
         return None
     if isinstance(val, list):
@@ -55,24 +118,24 @@ def normalize_str(val):
     return str(val)
 
 
-def compare_strict(a, b):
+def compare_strict(a, b) -> bool:
     return a == b
 
 
-def compare_case_insensitive(a, b):
+def compare_case_insensitive(a, b) -> bool:
     if a is None or b is None:
         return a == b
     return str(a).lower() == str(b).lower()
 
 
-def compare_substring(a, b):
+def compare_substring(a, b) -> bool:
     if a is None or b is None:
         return a == b
     a, b = str(a).lower(), str(b).lower()
     return a in b or b in a
 
 
-def normalize_fhir_name(fhir_name_array):
+def normalize_fhir_name(fhir_name_array) -> Dict[str, Any]:
     name = get_first(fhir_name_array) or {}
     return {
         "family": name.get("family"),
@@ -81,7 +144,7 @@ def normalize_fhir_name(fhir_name_array):
     }
 
 
-def normalize_fhir_address(fhir_address_array):
+def normalize_fhir_address(fhir_address_array) -> Dict[str, Any]:
     address = get_first(fhir_address_array) or {}
     return {
         "line": get_first(address.get("line", [])),
@@ -92,7 +155,7 @@ def normalize_fhir_address(fhir_address_array):
     }
 
 
-def normalize_fhir_marital_status(fhir_marital_status):
+def normalize_fhir_marital_status(fhir_marital_status) -> Optional[str]:
     if not fhir_marital_status:
         return None
     text = fhir_marital_status.get("text")
@@ -169,7 +232,10 @@ def extract_allergy_count_from_bundle(bundle: Dict[str, Any]) -> int:
 
 
 def extract_immunization_count_from_bundle(bundle: Dict[str, Any]) -> int:
-    """Extract count of Immunization resources from FHIR bundle"""
+    """
+    Extract count of Immunization resources from FHIR bundle, and also count Procedure resources
+    mentioning vaccines/immunizations.
+    """
     if bundle.get("resourceType") != "Bundle":
         return 0
 
@@ -178,6 +244,17 @@ def extract_immunization_count_from_bundle(bundle: Dict[str, Any]) -> int:
         resource = entry.get("resource", {})
         if resource.get("resourceType") == "Immunization":
             count += 1
+        elif resource.get("resourceType") == "Procedure":
+            code = resource.get("code") or {}
+            text = code.get("text", "") or ""
+            if "vaccine" in text.lower() or "immunization" in text.lower():
+                count += 1
+                continue
+            for coding in code.get("coding", []):
+                display = coding.get("display", "") or ""
+                if "vaccine" in display.lower() or "immunization" in display.lower():
+                    count += 1
+                    break
     return count
 
 
@@ -260,7 +337,7 @@ def read_n_lines(file_path: str, n: int) -> list:
 
 def evaluate_fields(
     eval_file_path: str, results_file_path: str, field_map: Dict[str, Dict[str, Any]]
-):
+) -> Tuple[Dict[str, int], int, Dict[str, list], int, int]:
     """
     field_map: {
         field_name: {
@@ -276,12 +353,15 @@ def evaluate_fields(
     total_field_comparisons = 0
     total_failed_comparisons = 0
     with open(results_file_path, "r") as results_file:
-        results_lines = list(results_file)
-    eval_lines = read_n_lines(eval_file_path, len(results_lines))
-    for line_num, (eval_line, results_line) in enumerate(zip(eval_lines, results_lines), 1):
-        eval_data = json.loads(eval_line.strip())
-        results_data = json.loads(results_line.strip())
-        fhir_bundle = parse_fhir_bundle(eval_data["fhir"])
+        results_data_list = json.load(results_file)
+    with open(eval_file_path, "r") as eval_file:
+        eval_data_list = json.load(eval_file)
+    # Truncate the eval_data_list to the same length as the results_data_list
+    # This logic will break if the results are out of order, or if the results from BAML begin
+    # at a record_id other than 1.
+    eval_data_list = eval_data_list[: len(results_data_list)]
+    for line_num, (eval_data, results_data) in enumerate(zip(eval_data_list, results_data_list), 1):
+        fhir_bundle = parse_fhir_bundle(eval_data)
         patient = extract_patient_from_bundle(fhir_bundle)
         if not patient:
             continue
@@ -307,128 +387,256 @@ def evaluate_fields(
     return stats, total, failed_records, total_field_comparisons, total_failed_comparisons
 
 
+# --- Field Extractor Functions ---
+
+
+def extract_family_fhir(patient: Dict[str, Any]) -> Any:
+    return normalize_fhir_name(patient.get("name", []))["family"]
+
+
+def extract_family_result(result: Dict[str, Any]) -> Any:
+    return result.get("name", {}).get("family") if result.get("name") else None
+
+
+def extract_given_fhir(patient: Dict[str, Any]) -> Any:
+    return normalize_fhir_name(patient.get("name", []))["given"]
+
+
+def extract_given_result(result: Dict[str, Any]) -> Any:
+    return result.get("name", {}).get("given") if result.get("name") else None
+
+
+def extract_prefix_fhir(patient: Dict[str, Any]) -> Any:
+    return normalize_fhir_name(patient.get("name", []))["prefix"]
+
+
+def extract_prefix_result(result: Dict[str, Any]) -> Any:
+    return result.get("name", {}).get("prefix") if result.get("name") else None
+
+
+def extract_line_fhir(patient: Dict[str, Any]) -> Any:
+    return normalize_fhir_address(patient.get("address", []))["line"]
+
+
+def extract_line_result(result: Dict[str, Any]) -> Any:
+    return result.get("address", {}).get("line") if result.get("address") else None
+
+
+def extract_city_fhir(patient: Dict[str, Any]) -> Any:
+    return normalize_fhir_address(patient.get("address", []))["city"]
+
+
+def extract_city_result(result: Dict[str, Any]) -> Any:
+    return result.get("address", {}).get("city") if result.get("address") else None
+
+
+def extract_state_fhir(patient: Dict[str, Any]) -> Any:
+    return normalize_fhir_address(patient.get("address", []))["state"]
+
+
+def extract_state_result(result: Dict[str, Any]) -> Any:
+    state = result.get("address", {}).get("state") if result.get("address") else None
+    if state is None:
+        return None
+    # Normalize to uppercase for lookup
+    state_upper = str(state).strip().upper()
+    return STATE_ABBR_TO_NAME.get(state_upper, state)
+
+
+def extract_postalCode_fhir(patient: Dict[str, Any]) -> Any:
+    return normalize_fhir_address(patient.get("address", []))["postalCode"]
+
+
+def extract_postalCode_result(result: Dict[str, Any]) -> Any:
+    return result.get("address", {}).get("postalCode") if result.get("address") else None
+
+
+def extract_country_fhir(patient: Dict[str, Any]) -> Any:
+    return normalize_fhir_address(patient.get("address", []))["country"]
+
+
+def extract_country_result(result: Dict[str, Any]) -> Any:
+    return result.get("address", {}).get("country") if result.get("address") else None
+
+
+def extract_gender_fhir(patient: Dict[str, Any]) -> str | None:
+    return patient["gender"].lower() if patient["gender"] else None
+
+
+def extract_gender_result(result: Dict[str, Any]) -> str | None:
+    return result["gender"].lower() if result["gender"] else None
+
+
+def extract_birthDate_fhir(patient: Dict[str, Any]) -> Any:
+    return patient.get("birthDate")
+
+
+def extract_birthDate_result(result: Dict[str, Any]) -> Any:
+    return result.get("birthDate")
+
+
+def extract_maritalStatus_fhir(patient: Dict[str, Any]) -> Any:
+    return normalize_fhir_marital_status(patient.get("maritalStatus"))
+
+
+def extract_maritalStatus_result(result: Dict[str, Any]) -> Any:
+    return result.get("maritalStatus")
+
+
+def extract_practitioner_fhir(bundle: Dict[str, Any]) -> Any:
+    return extract_all_practitioners_from_bundle(bundle)
+
+
+def extract_practitioner_result(result: Dict[str, Any]) -> Any:
+    return (
+        combine_practitioner_name(result.get("practitioner", {}))
+        if result.get("practitioner")
+        else None
+    )
+
+
+def compare_practitioner(result: Any, fhir_list: Any) -> bool:
+    return (
+        result in fhir_list
+        if fhir_list and result
+        else (result is None or result == "")
+        and (not fhir_list or all(not item for item in fhir_list))
+    )
+
+
+def extract_allergyRecordedCount_fhir(bundle: Dict[str, Any]) -> int:
+    return extract_allergy_count_from_bundle(bundle)
+
+
+def extract_allergyRecordedCount_result(result: Dict[str, Any]) -> int:
+    allergy = result.get("allergy") or {}
+    substance = allergy.get("substance") or []
+    return len(substance) if substance else 0
+
+
+def extract_immunizationCount_fhir(bundle: Dict[str, Any]) -> int:
+    return extract_immunization_count_from_bundle(bundle)
+
+
+def extract_immunizationCount_result(result: Dict[str, Any]) -> int:
+    return len(result.get("immunization") or [])
+
+
+def extract_immunizationDate_fhir(bundle: Dict[str, Any]) -> List[str]:
+    return extract_immunization_dates_from_bundle(bundle)
+
+
+def extract_immunizationDate_result(result: Dict[str, Any]) -> List[str]:
+    return [
+        imm.get("occurrenceDateTime") or imm.get("occurrenceString")
+        for imm in (result.get("immunization") or [])
+        if imm.get("occurrenceDateTime") or imm.get("occurrenceString")
+    ]
+
+
+def compare_immunizationDate(result: List[str], fhir_list: List[str]) -> bool:
+    return (
+        result[0] in fhir_list
+        if result and fhir_list
+        else (not result or not result[0])
+        and (not fhir_list or all(not item for item in fhir_list))
+    )
+
+
 # --- Field Map Definitions ---
 FIELD_MAP = {
     # Name fields
     "family": {
-        "extract_fhir": lambda p: normalize_fhir_name(p.get("name", []))["family"],
-        "extract_result": lambda r: r.get("name", {}).get("family") if r.get("name") else None,
+        "extract_fhir": extract_family_fhir,
+        "extract_result": extract_family_result,
         "compare": compare_strict,
     },
     "given": {
-        "extract_fhir": lambda p: normalize_fhir_name(p.get("name", []))["given"],
-        "extract_result": lambda r: r.get("name", {}).get("given") if r.get("name") else None,
+        "extract_fhir": extract_given_fhir,
+        "extract_result": extract_given_result,
         "compare": compare_strict,
     },
     "prefix": {
-        "extract_fhir": lambda p: normalize_fhir_name(p.get("name", []))["prefix"],
-        "extract_result": lambda r: r.get("name", {}).get("prefix") if r.get("name") else None,
+        "extract_fhir": extract_prefix_fhir,
+        "extract_result": extract_prefix_result,
         "compare": compare_strict,
     },
     # Address fields
     "line": {
-        "extract_fhir": lambda p: normalize_fhir_address(p.get("address", []))["line"],
-        "extract_result": lambda r: r.get("address", {}).get("line") if r.get("address") else None,
+        "extract_fhir": extract_line_fhir,
+        "extract_result": extract_line_result,
         "compare": compare_strict,
     },
     "city": {
-        "extract_fhir": lambda p: normalize_fhir_address(p.get("address", []))["city"],
-        "extract_result": lambda r: r.get("address", {}).get("city") if r.get("address") else None,
+        "extract_fhir": extract_city_fhir,
+        "extract_result": extract_city_result,
         "compare": compare_strict,
     },
     "state": {
-        "extract_fhir": lambda p: normalize_fhir_address(p.get("address", []))["state"],
-        "extract_result": lambda r: r.get("address", {}).get("state") if r.get("address") else None,
+        "extract_fhir": extract_state_fhir,
+        "extract_result": extract_state_result,
         "compare": compare_strict,
     },
     "postalCode": {
-        "extract_fhir": lambda p: normalize_fhir_address(p.get("address", []))["postalCode"],
-        "extract_result": lambda r: r.get("address", {}).get("postalCode")
-        if r.get("address")
-        else None,
+        "extract_fhir": extract_postalCode_fhir,
+        "extract_result": extract_postalCode_result,
         "compare": compare_strict,
     },
     "country": {
-        "extract_fhir": lambda p: normalize_fhir_address(p.get("address", []))["country"],
-        "extract_result": lambda r: r.get("address", {}).get("country")
-        if r.get("address")
-        else None,
+        "extract_fhir": extract_country_fhir,
+        "extract_result": extract_country_result,
         "compare": compare_strict,
     },
     # Simple fields
     "gender": {
-        "extract_fhir": lambda p: p.get("gender"),
-        "extract_result": lambda r: r.get("gender"),
+        "extract_fhir": extract_gender_fhir,
+        "extract_result": extract_gender_result,
         "compare": compare_case_insensitive,
     },
     "birthDate": {
-        "extract_fhir": lambda p: p.get("birthDate"),
-        "extract_result": lambda r: r.get("birthDate"),
+        "extract_fhir": extract_birthDate_fhir,
+        "extract_result": extract_birthDate_result,
         "compare": compare_strict,
     },
     "maritalStatus": {
-        "extract_fhir": lambda p: normalize_fhir_marital_status(p.get("maritalStatus")),
-        "extract_result": lambda r: r.get("maritalStatus"),
+        "extract_fhir": extract_maritalStatus_fhir,
+        "extract_result": extract_maritalStatus_result,
         "compare": compare_strict,
     },
     # Practitioner fields
     "practitioner": {
-        "extract_fhir": lambda bundle: extract_all_practitioners_from_bundle(bundle),
-        "extract_result": lambda r: combine_practitioner_name(r.get("practitioner", {}))
-        if r.get("practitioner")
-        else None,
-        "compare": lambda result, fhir_list: (
-            result in fhir_list
-            if fhir_list and result
-            else (result is None or result == "")
-            and (not fhir_list or all(not item for item in fhir_list))
-        ),
+        "extract_fhir": extract_practitioner_fhir,
+        "extract_result": extract_practitioner_result,
+        "compare": compare_practitioner,
     },
     # Allergy fields
     "allergyRecordedCount": {
-        "extract_fhir": extract_allergy_count_from_bundle,
-        "extract_result": lambda r: len(r.get("allergy", {}).get("substance", []))
-        if r.get("allergy", {}).get("substance")
-        else 0,
+        "extract_fhir": extract_allergyRecordedCount_fhir,
+        "extract_result": extract_allergyRecordedCount_result,
         "compare": compare_strict,
     },
     # Immunization fields
     "immunizationCount": {
-        "extract_fhir": extract_immunization_count_from_bundle,
-        "extract_result": lambda r: len(r.get("immunization", [])),
+        "extract_fhir": extract_immunizationCount_fhir,
+        "extract_result": extract_immunizationCount_result,
         "compare": compare_strict,
     },
-    "immunizationStatus": {
-        "extract_fhir": extract_immunization_status_from_bundle,
-        "extract_result": lambda r: [imm.get("status") for imm in r.get("immunization", []) if imm.get("status")],
-        "compare": lambda result, fhir_list: (
-            result[0] in fhir_list
-            if result and fhir_list
-            else (not result or not result[0])
-            and (not fhir_list or all(not item for item in fhir_list))
-        ),
-    },
     "immunizationDate": {
-        "extract_fhir": extract_immunization_dates_from_bundle,
-        "extract_result": lambda r: [
-            imm.get("occurrenceDateTime") or imm.get("occurrenceString")
-            for imm in r.get("immunization", [])
-            if imm.get("occurrenceDateTime") or imm.get("occurrenceString")
-        ],
-        "compare": lambda result, fhir_list: (
-            result[0] in fhir_list
-            if result and fhir_list
-            else (not result or not result[0])
-            and (not fhir_list or all(not item for item in fhir_list))
-        ),
+        "extract_fhir": extract_immunizationDate_fhir,
+        "extract_result": extract_immunizationDate_result,
+        "compare": compare_immunizationDate,
     },
 }
 
 
 # --- Reporting ---
 def print_field_stats(
-    stats, total, failed_records, total_field_comparisons, total_failed_comparisons
-):
+    stats: Dict[str, int],
+    total: int,
+    failed_records: Dict[str, list],
+    total_field_comparisons: int,
+    total_failed_comparisons: int,
+) -> None:
     print("=== INFORMATION EXTRACTION EVALUATION RESULTS ===\n")
     print(f"Total Records: {total}")
     for field, count in stats.items():
@@ -456,14 +664,14 @@ if __name__ == "__main__":
         "--eval_file",
         "-e",
         type=str,
-        default="../data/fhir.jsonl",
+        default="../data/fhir.json",
         help="Path to the evaluation (gold standard) file.",
     )
     parser.add_argument(
         "--results_file",
         "-r",
         type=str,
-        default="../data/results/extracted_fhir.jsonl",
+        default="../data/results/extracted_fhir.json",
         help="Path to the results file.",
     )
     args = parser.parse_args()
