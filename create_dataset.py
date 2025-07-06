@@ -12,12 +12,12 @@ for r in dicts:
     result = r["fhir"]
     fhir_records.append(json.loads(result))
 
-with open("data/fhir.jsonl", "w") as f:
-    for record in fhir_records:
-        f.write(json.dumps(record) + "\n")
+# Write FHIR records (eval set) to a json file
+with open("data/fhir.json", "w") as f:
+    json.dump(fhir_records, f, indent=2)
 
-# Write notes to a jsonl file
+# Write notes (raw unstructured data) to a jsonl file
 df.with_columns(
     pl.col("note").str.replace("### Instruction:\n", "")
     .str.replace("### Response:\n", "")
-).select("record_id", "note").write_ndjson("data/note.jsonl")
+).select("record_id", "note").write_json("data/note.json")
