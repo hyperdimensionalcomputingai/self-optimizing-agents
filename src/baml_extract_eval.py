@@ -307,120 +307,219 @@ def evaluate_fields(
     return stats, total, failed_records, total_field_comparisons, total_failed_comparisons
 
 
+# --- Field Extractor Functions ---
+
+def extract_family_fhir(patient):
+    return normalize_fhir_name(patient.get("name", []))["family"]
+
+def extract_family_result(result):
+    return result.get("name", {}).get("family") if result.get("name") else None
+
+def extract_given_fhir(patient):
+    return normalize_fhir_name(patient.get("name", []))["given"]
+
+def extract_given_result(result):
+    return result.get("name", {}).get("given") if result.get("name") else None
+
+def extract_prefix_fhir(patient):
+    return normalize_fhir_name(patient.get("name", []))["prefix"]
+
+def extract_prefix_result(result):
+    return result.get("name", {}).get("prefix") if result.get("name") else None
+
+def extract_line_fhir(patient):
+    return normalize_fhir_address(patient.get("address", []))["line"]
+
+def extract_line_result(result):
+    return result.get("address", {}).get("line") if result.get("address") else None
+
+def extract_city_fhir(patient):
+    return normalize_fhir_address(patient.get("address", []))["city"]
+
+def extract_city_result(result):
+    return result.get("address", {}).get("city") if result.get("address") else None
+
+def extract_state_fhir(patient):
+    return normalize_fhir_address(patient.get("address", []))["state"]
+
+def extract_state_result(result):
+    return result.get("address", {}).get("state") if result.get("address") else None
+
+def extract_postalCode_fhir(patient):
+    return normalize_fhir_address(patient.get("address", []))["postalCode"]
+
+def extract_postalCode_result(result):
+    return result.get("address", {}).get("postalCode") if result.get("address") else None
+
+def extract_country_fhir(patient):
+    return normalize_fhir_address(patient.get("address", []))["country"]
+
+def extract_country_result(result):
+    return result.get("address", {}).get("country") if result.get("address") else None
+
+def extract_gender_fhir(patient):
+    return patient.get("gender")
+
+def extract_gender_result(result):
+    return result.get("gender")
+
+def extract_birthDate_fhir(patient):
+    return patient.get("birthDate")
+
+def extract_birthDate_result(result):
+    return result.get("birthDate")
+
+def extract_maritalStatus_fhir(patient):
+    return normalize_fhir_marital_status(patient.get("maritalStatus"))
+
+def extract_maritalStatus_result(result):
+    return result.get("maritalStatus")
+
+def extract_practitioner_fhir(bundle):
+    return extract_all_practitioners_from_bundle(bundle)
+
+def extract_practitioner_result(result):
+    return combine_practitioner_name(result.get("practitioner", {})) if result.get("practitioner") else None
+
+def compare_practitioner(result, fhir_list):
+    return (
+        result in fhir_list
+        if fhir_list and result
+        else (result is None or result == "")
+        and (not fhir_list or all(not item for item in fhir_list))
+    )
+
+def extract_allergyRecordedCount_fhir(bundle):
+    return extract_allergy_count_from_bundle(bundle)
+
+def extract_allergyRecordedCount_result(result):
+    return len(result.get("allergy", {}).get("substance", [])) if result.get("allergy", {}).get("substance") else 0
+
+def extract_immunizationCount_fhir(bundle):
+    return extract_immunization_count_from_bundle(bundle)
+
+def extract_immunizationCount_result(result):
+    return len(result.get("immunization", []))
+
+def extract_immunizationStatus_fhir(bundle):
+    return extract_immunization_status_from_bundle(bundle)
+
+def extract_immunizationStatus_result(result):
+    return [imm.get("status") for imm in result.get("immunization", []) if imm.get("status")]
+
+def compare_immunizationStatus(result, fhir_list):
+    return (
+        result[0] in fhir_list
+        if result and fhir_list
+        else (not result or not result[0])
+        and (not fhir_list or all(not item for item in fhir_list))
+    )
+
+def extract_immunizationDate_fhir(bundle):
+    return extract_immunization_dates_from_bundle(bundle)
+
+def extract_immunizationDate_result(result):
+    return [
+        imm.get("occurrenceDateTime") or imm.get("occurrenceString")
+        for imm in result.get("immunization", [])
+        if imm.get("occurrenceDateTime") or imm.get("occurrenceString")
+    ]
+
+def compare_immunizationDate(result, fhir_list):
+    return (
+        result[0] in fhir_list
+        if result and fhir_list
+        else (not result or not result[0])
+        and (not fhir_list or all(not item for item in fhir_list))
+    )
+
 # --- Field Map Definitions ---
 FIELD_MAP = {
     # Name fields
     "family": {
-        "extract_fhir": lambda p: normalize_fhir_name(p.get("name", []))["family"],
-        "extract_result": lambda r: r.get("name", {}).get("family") if r.get("name") else None,
+        "extract_fhir": extract_family_fhir,
+        "extract_result": extract_family_result,
         "compare": compare_strict,
     },
     "given": {
-        "extract_fhir": lambda p: normalize_fhir_name(p.get("name", []))["given"],
-        "extract_result": lambda r: r.get("name", {}).get("given") if r.get("name") else None,
+        "extract_fhir": extract_given_fhir,
+        "extract_result": extract_given_result,
         "compare": compare_strict,
     },
     "prefix": {
-        "extract_fhir": lambda p: normalize_fhir_name(p.get("name", []))["prefix"],
-        "extract_result": lambda r: r.get("name", {}).get("prefix") if r.get("name") else None,
+        "extract_fhir": extract_prefix_fhir,
+        "extract_result": extract_prefix_result,
         "compare": compare_strict,
     },
     # Address fields
     "line": {
-        "extract_fhir": lambda p: normalize_fhir_address(p.get("address", []))["line"],
-        "extract_result": lambda r: r.get("address", {}).get("line") if r.get("address") else None,
+        "extract_fhir": extract_line_fhir,
+        "extract_result": extract_line_result,
         "compare": compare_strict,
     },
     "city": {
-        "extract_fhir": lambda p: normalize_fhir_address(p.get("address", []))["city"],
-        "extract_result": lambda r: r.get("address", {}).get("city") if r.get("address") else None,
+        "extract_fhir": extract_city_fhir,
+        "extract_result": extract_city_result,
         "compare": compare_strict,
     },
     "state": {
-        "extract_fhir": lambda p: normalize_fhir_address(p.get("address", []))["state"],
-        "extract_result": lambda r: r.get("address", {}).get("state") if r.get("address") else None,
+        "extract_fhir": extract_state_fhir,
+        "extract_result": extract_state_result,
         "compare": compare_strict,
     },
     "postalCode": {
-        "extract_fhir": lambda p: normalize_fhir_address(p.get("address", []))["postalCode"],
-        "extract_result": lambda r: r.get("address", {}).get("postalCode")
-        if r.get("address")
-        else None,
+        "extract_fhir": extract_postalCode_fhir,
+        "extract_result": extract_postalCode_result,
         "compare": compare_strict,
     },
     "country": {
-        "extract_fhir": lambda p: normalize_fhir_address(p.get("address", []))["country"],
-        "extract_result": lambda r: r.get("address", {}).get("country")
-        if r.get("address")
-        else None,
+        "extract_fhir": extract_country_fhir,
+        "extract_result": extract_country_result,
         "compare": compare_strict,
     },
     # Simple fields
     "gender": {
-        "extract_fhir": lambda p: p.get("gender"),
-        "extract_result": lambda r: r.get("gender"),
+        "extract_fhir": extract_gender_fhir,
+        "extract_result": extract_gender_result,
         "compare": compare_case_insensitive,
     },
     "birthDate": {
-        "extract_fhir": lambda p: p.get("birthDate"),
-        "extract_result": lambda r: r.get("birthDate"),
+        "extract_fhir": extract_birthDate_fhir,
+        "extract_result": extract_birthDate_result,
         "compare": compare_strict,
     },
     "maritalStatus": {
-        "extract_fhir": lambda p: normalize_fhir_marital_status(p.get("maritalStatus")),
-        "extract_result": lambda r: r.get("maritalStatus"),
+        "extract_fhir": extract_maritalStatus_fhir,
+        "extract_result": extract_maritalStatus_result,
         "compare": compare_strict,
     },
     # Practitioner fields
     "practitioner": {
-        "extract_fhir": lambda bundle: extract_all_practitioners_from_bundle(bundle),
-        "extract_result": lambda r: combine_practitioner_name(r.get("practitioner", {}))
-        if r.get("practitioner")
-        else None,
-        "compare": lambda result, fhir_list: (
-            result in fhir_list
-            if fhir_list and result
-            else (result is None or result == "")
-            and (not fhir_list or all(not item for item in fhir_list))
-        ),
+        "extract_fhir": extract_practitioner_fhir,
+        "extract_result": extract_practitioner_result,
+        "compare": compare_practitioner,
     },
     # Allergy fields
     "allergyRecordedCount": {
-        "extract_fhir": extract_allergy_count_from_bundle,
-        "extract_result": lambda r: len(r.get("allergy", {}).get("substance", []))
-        if r.get("allergy", {}).get("substance")
-        else 0,
+        "extract_fhir": extract_allergyRecordedCount_fhir,
+        "extract_result": extract_allergyRecordedCount_result,
         "compare": compare_strict,
     },
     # Immunization fields
     "immunizationCount": {
-        "extract_fhir": extract_immunization_count_from_bundle,
-        "extract_result": lambda r: len(r.get("immunization", [])),
+        "extract_fhir": extract_immunizationCount_fhir,
+        "extract_result": extract_immunizationCount_result,
         "compare": compare_strict,
     },
     "immunizationStatus": {
-        "extract_fhir": extract_immunization_status_from_bundle,
-        "extract_result": lambda r: [imm.get("status") for imm in r.get("immunization", []) if imm.get("status")],
-        "compare": lambda result, fhir_list: (
-            result[0] in fhir_list
-            if result and fhir_list
-            else (not result or not result[0])
-            and (not fhir_list or all(not item for item in fhir_list))
-        ),
+        "extract_fhir": extract_immunizationStatus_fhir,
+        "extract_result": extract_immunizationStatus_result,
+        "compare": compare_immunizationStatus,
     },
     "immunizationDate": {
-        "extract_fhir": extract_immunization_dates_from_bundle,
-        "extract_result": lambda r: [
-            imm.get("occurrenceDateTime") or imm.get("occurrenceString")
-            for imm in r.get("immunization", [])
-            if imm.get("occurrenceDateTime") or imm.get("occurrenceString")
-        ],
-        "compare": lambda result, fhir_list: (
-            result[0] in fhir_list
-            if result and fhir_list
-            else (not result or not result[0])
-            and (not fhir_list or all(not item for item in fhir_list))
-        ),
+        "extract_fhir": extract_immunizationDate_fhir,
+        "extract_result": extract_immunizationDate_result,
+        "compare": compare_immunizationDate,
     },
 }
 
