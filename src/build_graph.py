@@ -28,8 +28,7 @@ def setup_db() -> kuzu.Connection:
             phone STRING,
             email STRING,
             maritalStatus STRING,
-            primaryLanguage STRING,
-            multipleBirthBoolean BOOLEAN
+            primaryLanguage STRING
         )
         """
     )
@@ -103,7 +102,6 @@ def prep_patient_df(df: pl.DataFrame) -> pl.DataFrame:
         pl.col("email"),
         pl.col("maritalStatus"),
         pl.col("primaryLanguage"),
-        pl.col("multipleBirthBoolean"),
     ).drop("address", "practitioner", "immunization", "allergy", "name", "record_id")
     return df_patient
 
@@ -157,9 +155,10 @@ def prep_substance_df(df: pl.DataFrame) -> pl.DataFrame:
 def prep_immunization_df(df: pl.DataFrame) -> pl.DataFrame:
     df_immunization = (
         df.select("record_id", "immunization")
+        .explode("immunization")
         .unnest("immunization")
         .with_columns(
-            pl.col("vaccine_traits").list.join(separator=", ").alias("traits"),
+            pl.col("traits").list.join(separator=", ").alias("traits"),
             pl.col("occurrenceDateTime").str.to_lowercase().alias("occurrenceDateTime"),
             pl.concat_str(
                 [
@@ -223,8 +222,7 @@ def ingest_patient_nodes(conn: kuzu.Connection, df_patient: pl.DataFrame) -> Non
             p.phone = phone,
             p.email = email,
             p.maritalStatus = maritalStatus,
-            p.primaryLanguage = primaryLanguage,
-            p.multipleBirthBoolean = multipleBirthBoolean
+            p.primaryLanguage = primaryLanguage
         RETURN COUNT(*) AS num_patients
         """
     )
