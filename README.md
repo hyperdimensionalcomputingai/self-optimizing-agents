@@ -42,10 +42,10 @@ To create the dataset locally, run the following command:
 uv run create_dataset.py
 ```
 
-This creates the following two newline-delimited JSON files:
+This creates the following two JSON files:
 
-- Raw data: 2,726 notes in unstructured text format, output to `data/note.jsonl`
-- Evaluation data: 2,726 FHIR JSON records, output to `data/fhir.jsonl`
+- Raw data: 2,726 notes in unstructured text format, output to `data/note.json`
+- Evaluation data: 2,726 FHIR JSON records, output to `data/fhir.json`
 
 ## Setup Python environment
 
@@ -65,7 +65,7 @@ pip install -r requirements.txt
 ### Information extraction
 
 Our first goal is to extract entities and relationships that can form a knowledge graph from
-the raw data (patient notes) in the `data/note.jsonl` file. The information extraction pipeline
+the raw data (patient notes) in the `data/note.json` file. The information extraction pipeline
 is powered by [BAML](https://www.boundaryml.com/), a programming language for obtaining high-quality
 structured outputs from LLMs.
 
@@ -106,7 +106,7 @@ Evaluation consists of two parts:
 
 #### Graph construction evaluation
 
-The evaluation data in `data/fhir.jsonl` is used to evaluate the
+The evaluation data in `data/fhir.json` is used to evaluate the
 quality of results from the information extraction pipeline in BAML.
 
 🚧 TBD.

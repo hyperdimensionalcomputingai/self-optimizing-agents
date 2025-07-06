@@ -1,0 +1,7 @@
+baml-py==0.201.0
+kuzu==0.10.1
+polars==1.31.0
+pyarrow==20.0.0
+pydantic==2.11.7
+python-dotenv==1.1.1
+ipykernel==6.29.5
