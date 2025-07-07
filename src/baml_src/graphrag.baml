@@ -223,6 +223,6 @@ test RAGAnswerQuestion1 {
   args {
     question "How many patients received more than one immunization?"
     cypher "MATCH (p:Patient)-[r:HAS_IMMUNIZATION]->(i:Immunization) WITH p, count(i) AS immunizationCount WHERE immunizationCount > 1 RETURN count(DISTINCT p)"
-    context ""
+    context "count( DISTINCT p) = 2"
   }
 }
