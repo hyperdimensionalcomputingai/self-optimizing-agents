@@ -198,7 +198,7 @@ def combine_practitioner_name(practitioner_data: Dict[str, Any]) -> str:
     if family:
         parts.append(family)
 
-    return " ".join(parts).strip()
+    return " ".join(parts).strip().lower()
 
 
 # --- Generalized Evaluation ---
@@ -306,7 +306,7 @@ def extract_all_practitioners_from_bundle(bundle: Dict[str, Any]) -> list:
                 individual = participant.get("individual", {})
                 display = individual.get("display", "")
                 if display:
-                    practitioners.add(display)
+                    practitioners.add(display.lower())
 
     # Practitioner resources as before
     for entry in bundle.get("entry", []):
@@ -391,27 +391,37 @@ def evaluate_fields(
 
 
 def extract_family_fhir(patient: Dict[str, Any]) -> Any:
-    return normalize_fhir_name(patient.get("name", []))["family"]
+    family = normalize_fhir_name(patient.get("name", []))["family"]
+    return family.lower() if family else None
 
 
 def extract_family_result(result: Dict[str, Any]) -> Any:
-    return result.get("name", {}).get("family") if result.get("name") else None
+    family = result.get("name", {}).get("family") if result.get("name") else None
+    return family.lower() if family else None
 
 
 def extract_given_fhir(patient: Dict[str, Any]) -> Any:
-    return normalize_fhir_name(patient.get("name", []))["given"]
+    given = normalize_fhir_name(patient.get("name", []))["given"]
+    if isinstance(given, list):
+        return [g.lower() if g else None for g in given]
+    return given.lower() if given else None
 
 
 def extract_given_result(result: Dict[str, Any]) -> Any:
-    return result.get("name", {}).get("given") if result.get("name") else None
+    given = result.get("name", {}).get("given") if result.get("name") else None
+    if isinstance(given, list):
+        return [g.lower() if g else None for g in given]
+    return given.lower() if given else None
 
 
 def extract_prefix_fhir(patient: Dict[str, Any]) -> Any:
-    return normalize_fhir_name(patient.get("name", []))["prefix"]
+    prefix = normalize_fhir_name(patient.get("name", []))["prefix"]
+    return prefix.lower() if prefix else None
 
 
 def extract_prefix_result(result: Dict[str, Any]) -> Any:
-    return result.get("name", {}).get("prefix") if result.get("name") else None
+    prefix = result.get("name", {}).get("prefix") if result.get("name") else None
+    return prefix.lower() if prefix else None
 
 
 def extract_line_fhir(patient: Dict[str, Any]) -> Any:
