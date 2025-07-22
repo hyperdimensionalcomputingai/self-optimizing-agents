@@ -20,7 +20,7 @@ load_dotenv()
 os.environ["BAML_LOG"] = "WARN"
 # Set embedding registry in LanceDB to use ollama
 embedding_model = get_registry().get("ollama").create(name="nomic-embed-text")
-kuzu_db_manager = utils.KuzuDatabaseManager("./fhir_kuzu_db")
+kuzu_db_manager = utils.KuzuDatabaseManager("fhir_db.kuzu")
 
 
 async def prune_schema(question: str) -> str:
