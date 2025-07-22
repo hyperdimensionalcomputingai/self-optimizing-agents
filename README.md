@@ -18,10 +18,10 @@ By GraphGeeks
 ## All you really need to know
 
 - Python
+- Basic familiarity with vector search
 - How to use the terminal
-- Basics of Docker
 
-We'll be covering the basics of each of these in the workshop, so no worries if you're not that familiar with them!
+We'll be covering the implementation details in the workshop, so no worries if you're not that familiar with the topics covered!
 
 ## Instructors
 
@@ -62,74 +62,49 @@ pip install -r requirements.txt
 
 ## Components
 
-### Information extraction
+### 1. Information extraction
 
 Our first goal is to extract entities and relationships that can form a knowledge graph from
 the raw data (patient notes) in the `data/note.json` file. The information extraction pipeline
 is powered by [BAML](https://www.boundaryml.com/), a programming language for obtaining high-quality
 structured outputs from LLMs.
 
-```bash
-cd src
-uv run baml_extract.py
-```
+### 2. Store the graph in Kuzu
 
-### Store the graph in Kuzu
+[Kuzu](https://kuzudb.com/) is an embedded (in-process) graph database that we use to persist the
+graph and query it using Cypher.
 
-Kuzu is an embedded (in-process) graph database, so there is no server setup required! It's already included as a dependency in the `pyproject.toml` file, installed via `uv sync`.
+### 3. Store embeddings of the notes in LanceDB
 
-```bash
-cd src
-uv run build_graph.py
-```
-The Kuzu graph is stored in the `fhir_kuzu_db` directory, and can be visualized using the Kuzu Explorer tool (see [below](#graph-visualization)).
+We'll use [LanceDB](https://lancedb.com/) to store the embeddings of the notes. A vector index
+and a full-text search (FTS) index are created, so that we can run a hybrid search (vector + FTS)
+search on the data.
 
-### Graph RAG pipeline
+## Evaluation
 
-Once the graph is created, we will build a Graph RAG pipeline (also powered by BAML) that uses the
-graph to answer questions about the patient data.
-
-See the [Graph RAG script](src/graphrag.py).
-
-```bash
-cd src
-uv run graphrag.py
-```
-
-This runs a vanilla Graph RAG pipeline that uses the graph to answer questions about the patient data.
-
-### Agents & workflow orchestration
-
-Our next goal is to add agentic components to the Graph RAG system to improve the quality of the
-answers and to make the system more robust. We will use a variety of tools to build, monitor, and
-evaluate the agents.
-
-### End-to-end evaluation
-
-Evaluation consists of two parts:
+There are two parts to the evaluation on our system:
 
 1. Evaluating the quality of the graph construction
 2. Evaluating the quality of the Graph RAG and agent pipeline
 
-#### Graph construction evaluation
+#### 1. Graph construction evaluation
 
 The evaluation data in `data/fhir.json` is used to evaluate the
 quality of results from the information extraction pipeline in BAML.
 
 See the [evaluation script](src/baml_extract_eval.py).
 
-```bash
-cd src
-uv run baml_extract_eval.py
-```
-
-#### Graph, vector and FTS-based (hybrid) RAG and agent pipeline evaluation
+#### 2. Graph, vector and FTS-based (hybrid) RAG and agent pipeline evaluation
 
 We evaluate the RAG system that consists of a combination of graph, vector and FTS-based RAG
 using the [Opik](https://www.comet.com/site/products/opik/) observability tool.
 
 ## Graph visualization
 
+It can help to visualize the graph to understand the structure of the data. Two options are provided
+below.
+
+### Option 1: Kuzu Explorer (Requires Docker)
 Once the knowledge graph has been created in Kuzu, you can visualize it using the
 [Kuzu Explorer](https://docs.kuzudb.com/visualization/kuzu-explorer/#what-is-kuzu-explorer)tool.
 
@@ -152,3 +127,20 @@ MATCH (a)-[r*1..4]-(b) RETURN * LIMIT 500;
 ```
 
 ![](./assets/fhir-graph-paths.png)
+
+### Option 2: G.V()
+
+Alternatively, you can use the [G.V()](https://gdotv.com/) tool to visualize the graph.
+This is an all-in-one graph database client to write, debug, test and analyze results for your graph database of choice. G.V() comes with first-class support for Kuzu databases -- simply drag-drop
+your Kuzu graph database file into the G.V() desktop app, and you're good to go!
+
+The full graph as visualized in G.V() is shown below:
+
+![](./assets/fhir-graph-gdotv.png)
+
+
+
+
+
+
+

@@ -112,6 +112,14 @@ The hybrid RAG pipeline can be visualized as follows:
 
 ![Hybrid RAG workflow](../assets/hybrid-rag-workflow.png)
 
+### (Optional): UI to query the Hybrid RAG system
+
+You can run the simple streamlit UI provided to query the Hybrid RAG system in natural language.
+
+```bash
+uv run streamlit run ui.py
+```
+
 ### Run the tests
 
 A deterministic pytest test suite is provided as an initial sanity check (prior to using more advanced
@@ -154,6 +162,23 @@ have subjective answers in the next section.
 
 ## 5. Evaluate the RAG system
 
-We will use the Opik observability tool to evaluate the RAG system in a more granular way.
+We'll use the Opik observability platform to evaluate the RAG system in a more granular way, by sending
+traces of our LLM outputs to Opik and creating experiments to evaluate the quality of the RAG system.
 
-🚧 TBD.
+Set up an Opik account and a workspace. Store the required environment variables in the `.env` file
+shown below.
+
+```
+# Opik API key
+OPIK_API_KEY=
+# Opik workspace name
+OPIK_WORKSPACE=
+```
+
+You can then run the code in the script `rag_eval.py` to begin logging traces on Opik.
+
+```bash
+uv run rag_eval.py
+```
+
+More code is on the way!
