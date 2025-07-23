@@ -32,6 +32,9 @@ headers = {
     "X-Title": "GraphGeeks",  # Optional. Site title for rankings
 }
 
+# Configure Opik
+opik.configure(use_local=False)
+
 if OPIK_API_KEY and OPIK_WORKSPACE:
     os.environ["OPIK_API_KEY"] = OPIK_API_KEY
     os.environ["OPIK_WORKSPACE"] = OPIK_WORKSPACE

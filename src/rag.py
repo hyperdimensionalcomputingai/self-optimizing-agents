@@ -22,6 +22,9 @@ os.environ["BAML_LOG"] = "WARN"
 embedding_model = get_registry().get("ollama").create(name="nomic-embed-text")
 kuzu_db_manager = utils.KuzuDatabaseManager("fhir_db.kuzu")
 
+# Set OpenRouter API key
+os.environ["OPENROUTER_API_KEY"] = os.getenv("OPENROUTER_API_KEY")
+
 
 async def prune_schema(question: str) -> str:
     schema = kuzu_db_manager.get_schema_dict
