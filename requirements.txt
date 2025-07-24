@@ -1,7 +1,14 @@
-baml-py==0.201.0
+baml-py==0.202.1
 kuzu==0.11.0
+lancedb==0.24.0
+ollama==0.5.1
 polars==1.31.0
+pandas==2.3.1
 pyarrow==20.0.0
 pydantic==2.11.7
 python-dotenv==1.1.1
-ipykernel==6.29.5
+streamlit==1.46.1
+fastapi==0.116.0
+uvicorn==0.35.0
+httpx==0.28.1
+opik==1.8.2
