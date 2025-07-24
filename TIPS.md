@@ -1,16 +1,16 @@
 # Tips to get started
 
 If all these tools are new to you, it can seem a little daunting to get started.
-Below, we suggest an entry point into what looks like a relatively complex code base
+Below, we suggest an entry point into what looks like a relatively complex codebase
 at first glance -- the best way to get started is to begin experimenting!
 
 ## BAML for structured data extraction
 - Start with an empty repo, install uv and run  `uv init` to initialize the virtual environment with
 BAML, Kuzu and LanceDB (run `uv sync`)
-- Begin with a simple BAML schema and prompt and *immediately* test it on a few input samples. The intial BAML schema
-can/will be basic, so you can get a feel for the LLM's behaviour
+- Begin with a simple BAML schema and prompt and *immediately* test it on a few input samples. The initial BAML schema
+can/will be basic, so you can get a feel for the LLM's behavior
 - Iteratively improve on the BAML schema and prompt until you are satisfied with the results. Add
-assertions to the BAML tests to ensure that multiple  LLMs are tested and the promps translate reasonably
+assertions to the BAML tests to ensure that multiple LLMs are tested and the prompts translate reasonably
 well across them.
 - Once you are satisfied, import the BAML client code into Python and apply it on around 10 records.
 - Export the BAML output into a JSON file (do this for 10 records or so)
@@ -35,7 +35,7 @@ out a few keyword queries - test that relevant results are returned
 ## Onward and upward!
 Now that the individual pieces (structured data extraction, graph data storage and vector data storage)
 are making sense, you can experiment with different ways of bringing together vector + graph retrieval!
-- Hybrid RAG: Independendly retrieve from vector and graph, and combine the
+- Hybrid RAG: Independently retrieve from vector and graph, and combine the
 results into a synthesized response.
 - Graph-enhanced vector search: Use vector + FTS retrieval as an entry point to the graph nodes, and
 traverse the graph up to a depth of 2-3 from there.
@@ -44,7 +44,7 @@ graph traversal is needed, and route the query to the appropriate tool as needed
 errors or failed retrievals so that the user doesn't get a blank response
 after just a single try.
 - MCP servers & additional tools: You can look at including additional MCP tools and/or REST APIs to the workflow,
-such as calculator APIs, wikipedia search, etc. This can help provide adequate capabilities to the
+such as calculator APIs, Wikipedia search, etc. This can help provide adequate capabilities to the
 agent to answer a wider range of queries.
 
 ## Don't forget evals!
@@ -52,7 +52,7 @@ agent to answer a wider range of queries.
 suite of at least 20-50 queries that must pass to a sufficient degree to be considered
 enough for getting the app to production.
 - Some evals can be done via deterministic code (e.g., pytest test suites),
-but others are subjective, and can required either a human-in-the-loop
+but others are subjective, and can require either a human-in-the-loop
 (HITL) or an LLM-as-a-judge approach.
 - Plugging in the workflow into observability tools that support OpenTelemetry can help a lot with this, so make sure to think about
 these aspects early on, before scaling up the process to the entire
