@@ -17,18 +17,22 @@ By GraphGeeks
 
 ## All you really need to know
 
-- Python
+- Basics of Python
 - Basic familiarity with vector search
-- How to use the terminal
+- How to use the terminal and modern IDEs (like VS Code or Cursor)
 
-We'll be covering the implementation details in the workshop, so no worries if you're not that familiar with the topics covered!
+### Tips to get started
+
+After you've attended the sessions, we recommend cloning this repo and following our [tips to get started](./TIPS.md).
 
 ## Instructors
 
-* Amy Hodler
-* David Hughes
-* Prashanth Rao
-* Dennis Irorere
+This 3-part workshop is led by a team of 4 instructors.
+
+* [Amy Hodler](https://www.linkedin.com/in/amyhodler)
+* [Dennis Irorere](https://www.linkedin.com/in/dennis-irorere)
+* [Prashanth Rao](https://www.linkedin.com/in/prrao87)
+* [David Hughes](https://www.linkedin.com/in/dahugh)
 
 ## Dataset
 
