@@ -101,7 +101,14 @@ See the [evaluation script](src/baml_extract_eval.py).
 #### 2. Graph, vector and FTS-based (hybrid) RAG and agent pipeline evaluation
 
 We evaluate the RAG system that consists of a combination of graph, vector and FTS-based RAG
-using the [Opik](https://www.comet.com/site/products/opik/) observability tool.
+using the [Opik](https://www.comet.com/site/products/opik/) observability tool. The code for
+evaluating the RAG system instruments the BAML prompts with Opik so that we can trace the execution
+of each stage and quantify the system's performance. Guardrails are also added to showcase how to
+protect from sensitive data leaking out of the system.
+
+See the following docs in this repo for more details:
+- [BAML instrumentation](src/BAML_INSTRUMENTATION_README.md)
+- [Guardrails](src/GUARDRAILS_README.md)
 
 ## Graph visualization
 
