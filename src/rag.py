@@ -27,31 +27,39 @@ os.environ["OPENROUTER_API_KEY"] = os.getenv("OPENROUTER_API_KEY")
 
 
 async def prune_schema(question: str) -> str:
+
     schema = kuzu_db_manager.get_schema_dict
     schema_xml = kuzu_db_manager.get_schema_xml(schema)
+
     pruned_schema = await b.PruneSchema(schema_xml, question)
+
     pruned_schema_xml = kuzu_db_manager.get_schema_xml(pruned_schema.model_dump())
+
     print("Generated pruned schema XML")
     return pruned_schema_xml
 
 
 async def answer_question(question: str, context: str) -> str:
     answer = await b.AnswerQuestion(question, context)
+    
     return answer
 
 
 async def execute_graph_rag(question: str, schema_xml: str, important_entities: str) -> str:
-    response = await b.Text2Cypher(question, schema_xml, important_entities)
-    if response.cypher:
+    response_cypher = await b.Text2Cypher(question, schema_xml, important_entities)
+    
+    if response_cypher.cypher:
         # Run the Cypher query on the graph database
         conn = kuzu_db_manager.get_connection()
-        query = response.cypher
+        query = response_cypher.cypher
         response = conn.execute(query)
         result = response.get_as_pl().to_dicts()  # type: ignore
         print("Ran Cypher query")
     else:
         print("No Cypher query was generated from the given question and schema")
         result = ""
+        query = ""
+    
     context = dedent(
         f"""
         <CYPHER>
@@ -63,6 +71,7 @@ async def execute_graph_rag(question: str, schema_xml: str, important_entities: 
         </RESULT>
         """
     )
+    
     answer = await answer_question(question, context)
     return answer
 
@@ -74,6 +83,7 @@ async def execute_vector_and_fts_rag(
     lancedb_db_manager = await lancedb.connect_async("./fhir_lance_db")
     async_tbl = await lancedb_db_manager.open_table(lancedb_table_name)
     reranker = RRFReranker()
+    
     if important_entities:
         response = await async_tbl.search(important_entities, query_type="hybrid")
         response_polars = (
@@ -85,9 +95,11 @@ async def execute_vector_and_fts_rag(
         response_dicts = response_polars.to_dicts()
         context = " ".join([f"{row['note']}\n" for row in response_dicts])
         print("Generated vector context")
+        
     else:
         print("[INFO]: No important entities found, skipping querying vector database...")
         context = ""
+    
     return context
 
 
@@ -99,13 +111,21 @@ async def get_graph_answer(question, pruned_schema_xml, important_entities):
     return await execute_graph_rag(question, pruned_schema_xml, important_entities)
 
 
+async def extract_entity_keywords(question: str, pruned_schema_xml: str):
+    entities = await b.ExtractEntityKeywords(question, pruned_schema_xml)
+    
+    return entities
+
+
 async def run_hybrid_rag(question: str) -> tuple[str, str]:
     print(f"---\nQ: {question}")
+    
     pruned_schema_xml = await prune_schema(question)
-    entities = await b.ExtractEntityKeywords(question, pruned_schema_xml)
+    entities = await extract_entity_keywords(question, pruned_schema_xml)
     important_entities = " ".join(
         [f"{entity.key} {entity.value}".replace("_", " ") for entity in entities]
     )
+    
     # Start both RAG tasks concurrently
     vector_context_task = asyncio.create_task(
         get_vector_context(question, pruned_schema_xml, important_entities)
@@ -113,20 +133,29 @@ async def run_hybrid_rag(question: str) -> tuple[str, str]:
     graph_answer_task = asyncio.create_task(
         get_graph_answer(question, pruned_schema_xml, important_entities)
     )
+    
     # As soon as vector context is ready, start answer generation
     vector_context = await vector_context_task
     vector_answer_task = asyncio.create_task(answer_question(question, vector_context))
 
     # Await both vector answer generation and graph answer generation before returning
     vector_answer, graph_answer = await asyncio.gather(vector_answer_task, graph_answer_task)
+    
     return vector_answer, graph_answer
+
+
+async def synthesize_answers(question: str, vector_answer: str, graph_answer: str) -> str:
+    synthesized_answer = await b.SynthesizeAnswers(question, vector_answer, graph_answer)
+        
+    return synthesized_answer
 
 
 async def main(question: str) -> None:
     vector_answer, graph_answer = await run_hybrid_rag(question)
     print(f"A1: {vector_answer}A2: {graph_answer}")
-    synthesized_answer = await b.SynthesizeAnswers(question, vector_answer, graph_answer)
+    synthesized_answer = await synthesize_answers(question, vector_answer, graph_answer)
     print(f"Final answer: {synthesized_answer}")
+    
 
 
 if __name__ == "__main__":
