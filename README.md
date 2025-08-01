@@ -1,17 +1,17 @@
-Agentic Workflows for Graph RAG
+Agentic Self Optimization
 ================
 
-### ODSC Agentic AI Summit 2025 Workshop
+### Explorations in Self Optimizing Agents
 
 By GraphGeeks
 
 ----
 
-:spiral_calendar:  July 16 - 31, 2025
+:spiral_calendar:  
 
 :world_map:        Virtual
 
-:writing_hand:     [AI Summit Track](https://www.summit.ai/#Tracks)
+:writing_hand:     
 
 ----
 
@@ -20,17 +20,18 @@ By GraphGeeks
 - Basics of Python
 - Basic familiarity with vector search
 - How to use the terminal and modern IDEs (like VS Code or Cursor)
+- Optimization strategies
+- Come with a lot of creativity
 
 ### Tips to get started
 
-After you've attended the sessions, we recommend cloning this repo and following our [tips to get started](./TIPS.md).
+We recommend cloning this repo and following our [tips to get started](./TIPS.md).
 
-## Instructors
+## Researchers
 
-This 3-part workshop is led by a team of 4 instructors.
+These are the Primary Investigators
 
 * [Amy Hodler](https://www.linkedin.com/in/amyhodler)
-* [Dennis Irorere](https://www.linkedin.com/in/dennis-irorere)
 * [Prashanth Rao](https://www.linkedin.com/in/prrao87)
 * [David Hughes](https://www.linkedin.com/in/dahugh)
 
