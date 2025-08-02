@@ -19,7 +19,7 @@ from guardrails import (
     GuardrailSeverity,
     GuardrailValidationFailed
 )
-from enhanced_guardrail_integration import (
+from guardrails import (
     EnhancedGuardrailManager,
     GuardrailTraceDecorator
 )
