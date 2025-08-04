@@ -7,7 +7,7 @@ with Opik observability tracking.
 
 import asyncio
 import os
-from typing import Any, Callable, Dict, Optional, TypeVar
+from typing import Any, Callable, Dict, Optional, TypeVar, List
 
 from opik import opik_context
 from baml_py import Collector
@@ -90,7 +90,7 @@ class BAMLInstrumentation:
         metrics: list = None,
         sample_rate: float = None,
         additional_metadata: Optional[Dict[str, Any]] = None,
-    ) -> None:
+    ) -> Optional[List[Dict[str, Any]]]:
         """
         Run metrics after a BAML call has completed.
         
@@ -227,6 +227,8 @@ class BAMLInstrumentation:
             opik_context.update_current_trace(
                 feedback_scores=feedback_scores
             )
+            
+            return metric_results
     
     def _update_opik_context(self, span_name: str, additional_metadata: Dict[str, Any]) -> None:
         """
@@ -277,6 +279,7 @@ async def track_baml_call(
     *args,
     sample_rate: float = None,
     additional_metadata: Optional[Dict[str, Any]] = None,
+    return_collector: bool = False,
     **kwargs
 ) -> Any:
     """
@@ -289,19 +292,24 @@ async def track_baml_call(
         *args: Arguments to pass to the BAML function
         sample_rate: Fraction of calls to sample for metrics (if None, reads from METRICS_SAMPLE_RATE env var)
         additional_metadata: Additional metadata to include in the span
+        return_collector: Whether to return the collector along with the result
         **kwargs: Keyword arguments to pass to the BAML function
         
     Returns:
-        The result of the BAML function call
+        The result of the BAML function call, or tuple of (result, collector) if return_collector=True
     """
     instrumentation = BAMLInstrumentation(collector_name, sample_rate=sample_rate)
-    return await instrumentation.track_call(
+    result = await instrumentation.track_call(
         baml_function,
         span_name,
         *args,
         additional_metadata=additional_metadata,
         **kwargs
     )
+    
+    if return_collector:
+        return result, instrumentation.collector
+    return result
 
 
 async def run_post_call_metrics(
@@ -313,7 +321,7 @@ async def run_post_call_metrics(
     metrics: list = None,
     sample_rate: float = None,
     additional_metadata: Optional[Dict[str, Any]] = None,
-) -> None:
+) -> Optional[List[Dict[str, Any]]]:
     """
     Utility function to run metrics after a BAML call has completed.
     
@@ -328,7 +336,7 @@ async def run_post_call_metrics(
         additional_metadata: Additional metadata to include in the span
     """
     instrumentation = BAMLInstrumentation(collector_name, sample_rate=sample_rate)
-    await instrumentation.run_post_call_metrics(
+    return await instrumentation.run_post_call_metrics(
         span_name,
         input,
         output,

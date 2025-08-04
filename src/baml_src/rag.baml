@@ -32,6 +32,29 @@ class EntityKeyword {
   value string @description("Value of the entity from the graph schema")
 }
 
+// --- Prompt optimization types ---
+
+class PromptOptimizationData {
+  instructions string @description("The instructions section of the prompt")
+  question string @description("The question being asked")
+  role string @description("The role specification (e.g., 'user')")
+  vector_answer string @description("The vector answer input")
+  graph_answer string @description("The graph answer input")
+  final_answer_prompt string @description("The final answer prompt text")
+  full_prompt string @description("The complete prompt as sent to the LLM")
+}
+
+class OptimizedSynthesizeAnswersOutput {
+  instructions string @description("The instructions section of the prompt")
+  question string @description("The question being asked")
+  role string @description("The role specification (e.g., 'user')")
+  vector_answer string @description("The vector answer input")
+  graph_answer string @description("The graph answer input")
+  final_answer_prompt string @description("The final answer prompt text")
+  full_prompt string @description("The complete prompt as sent to the LLM (without instructions)")
+  graph_schema GraphSchema @description("The graph schema used to answer the question")
+}
+
 // --- Functions ---
 
 function PruneSchema(schema: string, question: string) -> GraphSchema {
@@ -172,6 +195,93 @@ function SynthesizeAnswers(question: string, vector_answer: string, graph_answer
     </GRAPH_ANSWER>
 
     FINAL ANSWER:
+  "#
+}
+
+// --- Prompt optimization ---
+
+function OptimizedSynthesizeAnswers(question: string, vector_answer: string, graph_answer: string) -> PromptOptimizationData {
+  client OpenRouterGoogleGemini2FlashGenerate
+  prompt #"
+    <INSTRUCTIONS>
+    Synthesize the provided answers from Graph RAG and Vector RAG into one single, coherent answer.
+
+    - If there is conflicting information between the two answers, provide both answers and state
+    the source.
+    - One of the answers may not have sufficient information to answer the question. In such cases,
+    use the answer that has the information to carry out your task.
+    - For questions involving counting or numerical values, beware that vector RAG is limited to only the
+    top 2 results. If both answers have numbers, only return the number from Graph RAG.
+    - If neither answer has sufficient information to answer the question,state that you don't have
+    enough information to answer the question.
+    </INSTRUCTIONS>
+
+    <QUESTION>
+    {{ question }}
+    </QUESTION>
+
+    <ROLE>
+    {{ _.role("user") }}
+    </ROLE>
+
+    <VECTOR_ANSWER>
+    {{ vector_answer }}
+    </VECTOR_ANSWER>
+
+    <GRAPH_ANSWER>
+    {{ graph_answer }}
+    </GRAPH_ANSWER>
+
+    FINAL ANSWER:
+    {{ ctx.output_format }}
+  "#
+}
+
+function ExtractPromptOptimizationData(question: string, vector_answer: string, graph_answer: string) -> PromptOptimizationData {
+  client OpenRouterGoogleGemini2Flash
+  prompt #"
+    Construct the prompt optimization data for the OptimizedSynthesizeAnswers function.
+    
+    Given the input parameters:
+    - question: {{ question }}
+    - vector_answer: {{ vector_answer }}
+    - graph_answer: {{ graph_answer }}
+    
+    The OptimizedSynthesizeAnswers function uses this prompt structure:
+    - <INSTRUCTIONS> section with synthesis instructions
+    - <QUESTION> section with the user's question
+    - <ROLE> section with the role specification
+    - <VECTOR_ANSWER> section with the vector answer input
+    - <GRAPH_ANSWER> section with the graph answer input
+    - FINAL ANSWER: prompt text
+    
+    Construct each component and provide the full prompt as it would be sent to the LLM.
+
+    {{ ctx.output_format }}
+  "#
+}
+
+function ExtractOptimizedSynthesizeAnswersOutput(question: string, vector_answer: string, graph_answer: string) -> OptimizedSynthesizeAnswersOutput {
+  client OpenRouterGoogleGemini2Flash
+  prompt #"
+    Construct the output data for the OptimizedSynthesizeAnswers function, excluding the instructions section.
+    
+    Given the input parameters:
+    - question: {{ question }}
+    - vector_answer: {{ vector_answer }}
+    - graph_answer: {{ graph_answer }}
+    
+    The OptimizedSynthesizeAnswers function uses this prompt structure:
+    - <INSTRUCTIONS> section with synthesis instructions (EXCLUDE THIS)
+    - <QUESTION> section with the user's question
+    - <ROLE> section with the role specification
+    - <VECTOR_ANSWER> section with the vector answer input
+    - <GRAPH_ANSWER> section with the graph answer input
+    - FINAL ANSWER: prompt text
+    
+    Construct each component EXCEPT the instructions and provide the full prompt without the instructions section.
+
+    {{ ctx.output_format }}
   "#
 }
 
@@ -363,5 +473,23 @@ test SynthesizeAnswers3 {
     question "Did the practitioner 'Arla Fritsch' treat more than one patient?"
     vector_answer "The practitioner 'Arla Fritsch' treated 4 patients."
     graph_answer "The practitioner 'Arla Fritsch' treated 3 patients."
+  }
+}
+
+test ExtractPromptOptimizationData1 {
+  functions [ExtractPromptOptimizationData]
+  args {
+    question "To what substances is Ms. Lachelle Adriane Huels allergic to?"
+    vector_answer "Ms. Lachelle Adriane Huels is allergic to House dust mite (organism). The severity of the allergy is low, and it was recorded on June 13, 2003."
+    graph_answer "Based on the provided information, it's not clear whether Ms. Lachelle Adriane Huels has any allergies."
+  }
+}
+
+test OptimizedSynthesizeAnswers1 {
+  functions [OptimizedSynthesizeAnswers]
+  args {
+    question "To what substances is Ms. Lachelle Adriane Huels allergic to?"
+    vector_answer "Ms. Lachelle Adriane Huels is allergic to House dust mite (organism). The severity of the allergy is low, and it was recorded on June 13, 2003."
+    graph_answer "Based on the provided information, it's not clear whether Ms. Lachelle Adriane Huels has any allergies."
   }
 }

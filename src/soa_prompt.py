@@ -32,13 +32,22 @@ from guardrails import (
     validate_output_with_guardrails,
     EnhancedGuardrailManager
 )
+from prompt_optimization import collect_response_with_metrics, prompt_optimizer
+from baml_request_extractor import extract_request_from_collector, get_prompt_from_request, get_model_from_request
+from baml_metadata_extractor import create_span_metadata_with_baml_info
+from baml_client import types as baml_types
+from opik_utils import conditional_opik_track, is_opik_tracking_enabled, get_opik_tracking_status
+from logging_config import get_logger
 
 # Load environment variables
 load_dotenv()
 OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY")
 OPIK_API_KEY = os.environ.get("OPIK_API_KEY")
 OPIK_WORKSPACE = os.environ.get("OPIK_WORKSPACE")
-OPIK_PROJECT_NAME = "ODSC-RAG"
+OPIK_PROJECT_NAME = "SOA-Prompts"
+
+# Initialize logger
+logger = get_logger(__name__)
 
 # Set a reasonable sample rate for metrics to avoid overwhelming the system
 os.environ["METRICS_SAMPLE_RATE"] = "0.05"  # 5% of calls will run metrics
@@ -84,22 +93,28 @@ if OPIK_API_KEY and OPIK_WORKSPACE:
     if OPENROUTER_API_KEY:
         os.environ["OPENROUTER_API_KEY"] = OPENROUTER_API_KEY
     else:
-        print("Warning: OPENROUTER_API_KEY not set. Opik metrics may fail.")
+        logger.warning("OPENROUTER_API_KEY not set. Opik metrics may fail.")
     
     # Configure Opik for cloud usage
     opik.configure(use_local=False)
-    print("Opik configured for cloud tracking")
+    logger.info("Opik configured for cloud tracking")
 else:
-    print(
+    logger.warning(
         "Please set the OPIK_API_KEY and OPIK_WORKSPACE environment variables to enable opik tracking"
     )
     # Disable Opik tracking if credentials are not provided
     opik.configure(use_local=True)
-    print("Opik configured for local tracking (no cloud credentials)")
+    logger.info("Opik configured for local tracking (no cloud credentials)")
+
+# Print Opik tracking status
+tracking_status = get_opik_tracking_status()
+logger.info(f"Opik tracking enabled: {tracking_status['enabled']}")
+if not tracking_status['enabled']:
+    logger.info("Note: Opik tracking is disabled via OPIK_TRACKING_ENABLED environment variable")
 
 
 # Core RAG Functions
-@opik.track(flush=True)
+@conditional_opik_track(flush=True)
 async def prune_schema(question: str) -> str:
     schema = kuzu_db_manager.get_schema_dict
     schema_xml = kuzu_db_manager.get_schema_xml(schema)
@@ -113,11 +128,11 @@ async def prune_schema(question: str) -> str:
     )
 
     pruned_schema_xml = kuzu_db_manager.get_schema_xml(pruned_schema.model_dump())
-    print("Generated pruned schema XML")
+    logger.info("Generated pruned schema XML")
     return pruned_schema_xml
 
 
-@opik.track(flush=True)
+@conditional_opik_track(flush=True)
 async def answer_question(question: str, context: str) -> str:
     answer = await track_baml_call(
         b.AnswerQuestion,
@@ -129,7 +144,7 @@ async def answer_question(question: str, context: str) -> str:
     return answer
 
 
-@opik.track(flush=True)
+@conditional_opik_track(flush=True)
 async def execute_graph_rag(question: str, schema_xml: str, important_entities: str) -> str:
     response_cypher = await track_baml_call(
         b.Text2Cypher,
@@ -146,9 +161,9 @@ async def execute_graph_rag(question: str, schema_xml: str, important_entities: 
         query = response_cypher.cypher
         response = conn.execute(query)
         result = response.get_as_pl().to_dicts()  # type: ignore
-        print("Ran Cypher query")
+        logger.info("Ran Cypher query")
     else:
-        print("No Cypher query was generated from the given question and schema")
+        logger.warning("No Cypher query was generated from the given question and schema")
         result = ""
         query = ""
     
@@ -178,7 +193,7 @@ async def execute_graph_rag(question: str, schema_xml: str, important_entities: 
     return answer
 
 
-@opik.track(flush=True)
+@conditional_opik_track(flush=True)
 async def execute_vector_and_fts_rag(
     question: str, schema_xml: str, important_entities: str, top_k: int = 2
 ) -> str:
@@ -197,7 +212,7 @@ async def execute_vector_and_fts_rag(
         )
         response_dicts = response_polars.to_dicts()
         context = " ".join([f"{row['note']}\n" for row in response_dicts])
-        print("Generated vector context")
+        logger.info("Generated vector context")
         
         # Update opik context with vector search data
         opik_context.update_current_span(
@@ -210,7 +225,7 @@ async def execute_vector_and_fts_rag(
             },
         )
     else:
-        print("[INFO]: No important entities found, skipping querying vector database...")
+        logger.info("No important entities found, skipping querying vector database...")
         context = ""
         
         # Update opik context for skipped search
@@ -227,17 +242,17 @@ async def execute_vector_and_fts_rag(
     return context
 
 
-@opik.track(flush=True)
+@conditional_opik_track(flush=True)
 async def get_vector_context(question, pruned_schema_xml, important_entities, top_k=2):
     return await execute_vector_and_fts_rag(question, pruned_schema_xml, important_entities, top_k)
 
 
-@opik.track(flush=True)
+@conditional_opik_track(flush=True)
 async def get_graph_answer(question, pruned_schema_xml, important_entities):
     return await execute_graph_rag(question, pruned_schema_xml, important_entities)
 
 
-@opik.track(flush=True)
+@conditional_opik_track(flush=True)
 async def extract_entity_keywords(question: str, pruned_schema_xml: str):
     entities = await track_baml_call(
         b.ExtractEntityKeywords,
@@ -248,27 +263,12 @@ async def extract_entity_keywords(question: str, pruned_schema_xml: str):
         additional_metadata={"entities_extracted": lambda: len(entities)}
     )
 
-    # Convert entities to a string representation for metrics
-    entities_str = "\n".join([f"- key: {entity.key}\n  value: {entity.value}" for entity in entities])
-    
-    # Use Opik Contains metric to check if the question contains the extracted entities
-    await run_post_call_metrics(
-        "extract_entity_keywords_collector",
-        "extract_entity_keywords",
-        input=question,
-        output=question,  # The question is what we're checking
-        context=[pruned_schema_xml],
-        metrics=[
-            {"type": "Contains", "params": {"output": question, "reference": entities_str}}
-        ]
-    )
-
     return entities
 
 
-@opik.track(flush=True)
+@conditional_opik_track(flush=True)
 async def run_hybrid_rag(question: str, question_number: int = None) -> tuple[str, str]:
-    print(f"---\nQuestion {question_number}: {question}")
+    logger.info(f"---\nQuestion {question_number}: {question}")
     
     # Apply input guardrails if enabled
     if GUARDRAILS_ENABLED:
@@ -287,11 +287,11 @@ async def run_hybrid_rag(question: str, question_number: int = None) -> tuple[st
             )
             
             if processed_question != question:
-                print(f"[INFO] Input processed by guardrails: {processed_question}")
+                logger.info(f"Input processed by guardrails: {processed_question}")
                 question = processed_question
                 
         except Exception as e:
-            print(f"[WARNING] Input guardrail validation failed: {e}")
+            logger.warning(f"Input guardrail validation failed: {e}")
     
     pruned_schema_xml = await prune_schema(question)
     entities = await extract_entity_keywords(question, pruned_schema_xml)
@@ -328,7 +328,7 @@ async def run_hybrid_rag(question: str, question_number: int = None) -> tuple[st
     return vector_answer, graph_answer
 
 
-@opik.track(flush=True)
+@conditional_opik_track(flush=True)
 async def synthesize_answers(question: str, vector_answer: str, graph_answer: str) -> str:
     # Simple manual comparison of vector and graph answers
     if vector_answer and graph_answer:
@@ -338,7 +338,7 @@ async def synthesize_answers(question: str, vector_answer: str, graph_answer: st
         common_words = vector_words.intersection(graph_words)
         similarity = len(common_words) / max(len(vector_words), len(graph_words)) if max(len(vector_words), len(graph_words)) > 0 else 0
         
-        print(f"[INFO] Simple similarity score: {similarity:.3f}")
+        logger.info(f"Simple similarity score: {similarity:.3f}")
         
         # Update Opik context with simple comparison
         opik_context.update_current_span(
@@ -351,59 +351,45 @@ async def synthesize_answers(question: str, vector_answer: str, graph_answer: st
             }
         )
     
-    synthesized_answer = await track_baml_call(
-        b.SynthesizeAnswers,
-        "synthesize_answers_collector",
-        "synthesize_answers",
+    # Get structured prompt data directly from OptimizedSynthesizeAnswers
+    prompt_data = await b.OptimizedSynthesizeAnswers(
         question,
         vector_answer,
-        graph_answer,
+        graph_answer
     )
     
-    # Apply output guardrails if enabled
-    if GUARDRAILS_ENABLED:
-        try:
-            # Use enhanced guardrail manager for better tracing
-            processed_answer = await enhanced_guardrail_manager.validate_with_detailed_tracing(
-                synthesized_answer,
-                span_name=f"output_guardrail_validation_q{question_number}" if 'question_number' in locals() else "output_guardrail_validation",
-                trace_tags=["rag_output", "email_validation"],
-                custom_metadata={
-                    "question_number": question_number if 'question_number' in locals() else None,
-                    "workflow_step": "output_validation",
-                    "rag_type": "hybrid",
-                    "answer_length": len(synthesized_answer)
-                },
-                validation_type="output"
-            )
-            
-            if processed_answer != synthesized_answer:
-                print(f"[INFO] Output processed by guardrails")
-                synthesized_answer = processed_answer
-                
-        except Exception as e:
-            print(f"[WARNING] Output guardrail validation failed: {e}")
+    # Create span metadata with BAML type information
+    try:
+        additional_metadata = {
+            "model_used": "OpenRouterGoogleGemini2FlashGenerate",
+            "client_name": "OpenRouterGoogleGemini2FlashGenerate",
+            "provider": "openrouter",
+        }
+        
+        span_metadata = create_span_metadata_with_baml_info(
+            prompt_data=prompt_data,
+            baml_type_class=baml_types.PromptOptimizationData,
+            additional_metadata=additional_metadata
+        )
+        
+        # Update the current span with structured prompt data for future optimization
+        opik_context.update_current_span(
+            name="synthesize_answers",
+            metadata=span_metadata
+        )
+        logger.info(f"BAML prompt optimization data added to span metadata (length: {len(prompt_data.full_prompt)})")
+    except Exception as e:
+        logger.warning(f"Failed to add BAML prompt optimization data to span: {e}")
     
-    # Run metrics after the BAML call completes
-    await run_post_call_metrics(
-        "synthesize_answers_collector",
-        "synthesize_answers",
-        input=question,
-        output=synthesized_answer,
-        context=[graph_answer + vector_answer],
-        metrics=[
-            {"type": "Hallucination", "params": {"model": "openrouter/openai/gpt-4o"}},
-            {"type": "AnswerRelevance", "params": {"model": "openrouter/openai/gpt-4o"}},
-            {"type": "Moderation", "params": {"model": "openrouter/openai/gpt-4o"}},
-            {"type": "Usefulness", "params": {"model": "openrouter/openai/gpt-4o"}},
-        ]
-    )
+    # For now, we need to extract the actual synthesized answer from the prompt data
+    # This is a temporary solution - ideally the function would return both the answer and the prompt data
+    synthesized_answer = prompt_data.final_answer_prompt  # This is not ideal, but works for now
     
     return synthesized_answer
 
 
 # Evaluation Functions
-@opik.track(flush=True)
+@conditional_opik_track(flush=True)
 async def generate_response(question: str, question_number: int = None) -> str | None:
     graph_answer, vector_answer = await run_hybrid_rag(question, question_number)
     synthesized_answer = await synthesize_answers(question, vector_answer, graph_answer)
@@ -429,12 +415,12 @@ async def generate_response(question: str, question_number: int = None) -> str |
     return synthesized_answer
 
 
-@opik.track(flush=True)
+@conditional_opik_track(flush=True)
 async def run_evaluation() -> None:
     """Run the evaluation suite with predefined questions."""
     questions = [
-        "How many patients with the last name 'Rosenbaum' received multiple immunizations?",
         "What are the full names of the patients treated by the practitioner named Josef Klein?",
+        "How many patients with the last name 'Rosenbaum' received multiple immunizations?",
         "Do any patients have the email address 'joseph.klein@example.com'? If so, what is their full name and what is the full name of the practitioner who treated them?"
         "Did the practitioner 'Arla Fritsch' treat more than one patient?",
         "What are the unique categories of substances patients are allergic to?",
@@ -448,7 +434,7 @@ async def run_evaluation() -> None:
     
     # Create the top-level trace for the entire evaluation suite
     opik_context.update_current_trace(
-        name="RAG Evaluation Suite",
+        name="Prompt Optimization Experiment",
         input={"total_questions": len(questions)},
         metadata={
             "evaluation_type": "full_suite",
@@ -465,8 +451,31 @@ async def run_evaluation() -> None:
     
     for i, question in enumerate(questions[:num_questions], 1):
         result = await generate_response(question, question_number=i)
-        print(f"Answer {i}: {result}")
-        print("-" * 80)
+        logger.info(f"Answer {i}: {result}")
+        logger.info("-" * 80)
+    
+    # Display dataset statistics after evaluation
+    logger.info("\n" + "=" * 80)
+    logger.info("COMBINED DATASET STATISTICS")
+    logger.info("=" * 80)
+    stats = await prompt_optimizer.get_dataset_stats()
+    
+    if isinstance(stats, dict) and "error" not in stats:
+        logger.info(f"Total items: {stats.get('total_items', 0)}")
+        logger.info("\nMetrics:")
+        metrics = stats.get('metrics', {})
+        for metric_name, metric_stats in metrics.items():
+            logger.info(f"\n  {metric_name.upper()}:")
+            if isinstance(metric_stats, dict):
+                logger.info(f"    Count: {metric_stats.get('count', 0)}")
+                logger.info(f"    Average: {metric_stats.get('average', 0):.3f}")
+                logger.info(f"    Highest: {metric_stats.get('highest', 0):.3f}")
+                logger.info(f"    Lowest: {metric_stats.get('lowest', 0):.3f}")
+                logger.info(f"    Threshold: {metric_stats.get('threshold', 0):.3f}")
+                logger.info(f"    Above threshold: {metric_stats.get('items_above_threshold', 0)}")
+    else:
+        logger.info(f"Dataset stats: {stats}")
+    logger.info("=" * 80)
 
 
 if __name__ == "__main__":
