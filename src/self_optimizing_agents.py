@@ -110,7 +110,7 @@ async def store_prompt_in_function_dataset(function_name: str, question: str, an
         from prompt_optimization import PromptOptimizationManager
         
         # Create dataset name based on function
-        dataset_name = f"soa_prompt_optimization_{function_name.lower()}"
+        dataset_name = f"self_optimizing_agents_optimization_{function_name.lower()}"
         
         # Create a function-specific prompt optimizer
         function_optimizer = PromptOptimizationManager(dataset_name=dataset_name)
@@ -884,14 +884,15 @@ async def synthesize_answers(question: str, vector_answer: str, graph_answer: st
 # Evaluation Functions
 @conditional_opik_track(flush=True)
 async def generate_response(question: str, question_number: int = None) -> str | None:
+    """Generate response for individual calls (UI or evaluation) with prompt optimization."""
     vector_answer, graph_answer = await run_hybrid_rag(question, question_number)
     synthesized_answer = await synthesize_answers(question, vector_answer, graph_answer, question_number)
     
-    # Log summary of function-specific datasets
+    # Process extracted prompts for optimization (for both UI and evaluation calls)
     if extracted_prompts:
         logger.info(f"Function-specific datasets created for {len(extracted_prompts)} BAML functions:")
         for function_name, prompts in extracted_prompts.items():
-            dataset_name = f"soa_prompt_optimization_{function_name.lower()}"
+            dataset_name = f"self_optimizing_agents_optimization_{function_name.lower()}"
             logger.info(f"  - {dataset_name}: {len(prompts)} prompts")
         
         # Clear the extracted prompts for the next question
@@ -913,7 +914,7 @@ async def generate_response(question: str, question_number: int = None) -> str |
     opik_context.update_current_span(
         name=span_name,
         metadata={
-            "workflow_type": "rag_evaluation",
+            "workflow_type": "rag_evaluation" if question_number else "rag_ui_call",
             "question_number": question_number,
             "question": question,
             "vector_answer_length": len(vector_answer),
@@ -928,6 +929,46 @@ async def generate_response(question: str, question_number: int = None) -> str |
     )
     
     return synthesized_answer
+
+
+@conditional_opik_track(flush=True)
+async def generate_ui_response(question: str) -> str | None:
+    """Generate response specifically for UI calls with prompt optimization."""
+    # Create a trace for UI calls
+    opik_context.update_current_trace(
+        name="UI Query",
+        input={"question": question},
+        metadata={
+            "source": "ui",
+            "timestamp": datetime.now().isoformat(),
+        },
+        tags=["rag", "ui", "fhir", "healthcare"]
+    )
+    
+    # Use the same logic as generate_response but without question_number
+    return await generate_response(question, question_number=None)
+
+@conditional_opik_track(flush=True)
+async def generate_ui_response_with_details(question: str) -> tuple[str | None, str, str]:
+    """Generate response with vector and graph answers for UI calls."""
+    # Create a trace for UI calls
+    opik_context.update_current_trace(
+        name="UI Query with Details",
+        input={"question": question},
+        metadata={
+            "source": "ui",
+            "timestamp": datetime.now().isoformat(),
+        },
+        tags=["rag", "ui", "fhir", "healthcare"]
+    )
+    
+    # Get vector and graph answers
+    vector_answer, graph_answer = await run_hybrid_rag(question, question_number=None)
+    
+    # Synthesize the final answer
+    synthesized_answer = await synthesize_answers(question, vector_answer, graph_answer, question_number=None)
+    
+    return synthesized_answer, vector_answer, graph_answer
 
 
 @conditional_opik_track(flush=True)

@@ -11,7 +11,7 @@ export interface QueryRequest {
 
 export interface QueryResponse {
   response: string;
-  ontology_context?: any;
-  graph_context_str?: any;
+  vector_answer?: string;
+  graph_answer?: string;
   graph_data?: any;
 }

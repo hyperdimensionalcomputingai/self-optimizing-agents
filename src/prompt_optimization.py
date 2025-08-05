@@ -40,7 +40,7 @@ class PromptOptimizationManager:
     high-quality responses in a combined dataset for multi-dimensional optimization.
     """
     
-    def __init__(self, dataset_name: str = "soa_prompt_optimization", default_threshold: float = 0.8):
+    def __init__(self, dataset_name: str = "self_optimizing_agents_optimization", default_threshold: float = 0.8):
         """
         Initialize the prompt optimization manager.
         

@@ -80,7 +80,7 @@ The following files have been updated to use conditional tracking:
 
 ### Core Files
 - `src/opik_utils.py` - New utility module for conditional tracking
-- `src/soa_prompt.py` - Updated all `@opik.track` decorators
+- `src/self_optimizing_agents.py` - Updated all `@opik.track` decorators
 - `src/rag_obs_eval.py` - Updated all `@opik.track` decorators
 - `src/prompt_optimization.py` - Updated to respect conditional tracking
 

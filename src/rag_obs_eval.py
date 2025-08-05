@@ -42,10 +42,10 @@ load_dotenv()
 OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY")
 OPIK_API_KEY = os.environ.get("OPIK_API_KEY")
 OPIK_WORKSPACE = os.environ.get("OPIK_WORKSPACE")
-OPIK_PROJECT_NAME = "ODSC-RAG"
+OPIK_PROJECT_NAME = os.environ.get("OPIK_PROJECT_NAME")
 
 # Set a reasonable sample rate for metrics to avoid overwhelming the system
-os.environ["METRICS_SAMPLE_RATE"] = "0.05"  # 5% of calls will run metrics
+os.environ["METRICS_SAMPLE_RATE"] = os.environ.get("METRICS_SAMPLE_RATE")
 
 # Configure BAML logging
 os.environ["BAML_LOG"] = "OFF"

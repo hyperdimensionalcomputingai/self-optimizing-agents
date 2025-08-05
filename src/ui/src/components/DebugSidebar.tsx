@@ -1,15 +1,15 @@
 import React from 'react';
 
 interface DebugSidebarProps {
-  ontologyContext?: any;
-  graphContext?: any;
+  vectorAnswer?: string;
+  graphAnswer?: string;
   isOpen: boolean;
   onToggle: () => void;
 }
 
 const DebugSidebar: React.FC<DebugSidebarProps> = ({
-  ontologyContext,
-  graphContext,
+  vectorAnswer,
+  graphAnswer,
   isOpen,
   onToggle
 }) => {
@@ -30,16 +30,16 @@ const DebugSidebar: React.FC<DebugSidebarProps> = ({
 
         <div className="sidebar-content">
           <div className="debug-section">
-            <h4>Ontology Context</h4>
+            <h4>Vector Answer</h4>
             <div className="debug-data">
-              <pre>{typeof ontologyContext === 'string' ? ontologyContext : JSON.stringify(ontologyContext, null, 2) || 'No data'}</pre>
+              <pre>{vectorAnswer || 'No data'}</pre>
             </div>
           </div>
 
           <div className="debug-section">
-            <h4>Graph Context</h4>
+            <h4>Graph Answer</h4>
             <div className="debug-data">
-              <pre>{typeof graphContext === 'string' ? graphContext : JSON.stringify(graphContext, null, 2) || 'No data'}</pre>
+              <pre>{graphAnswer || 'No data'}</pre>
             </div>
           </div>
         </div>

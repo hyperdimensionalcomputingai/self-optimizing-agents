@@ -5,7 +5,7 @@ import { Message } from '../types';
 import { queryAPI } from '../services/api';
 
 interface ChatContainerProps {
-  onDebugDataUpdate?: (ontologyContext: any, graphContext: any, graphData?: any) => void;
+  onDebugDataUpdate?: (vectorAnswer: string, graphAnswer: string, graphData?: any) => void;
 }
 
 const ChatContainer: React.FC<ChatContainerProps> = ({ onDebugDataUpdate }) => {
@@ -36,7 +36,7 @@ const ChatContainer: React.FC<ChatContainerProps> = ({ onDebugDataUpdate }) => {
       const response = await queryAPI(messageText);
 
       if (onDebugDataUpdate) {
-        onDebugDataUpdate(response.ontology_context, response.graph_context_str, response.graph_data);
+        onDebugDataUpdate(response.vector_answer || '', response.graph_answer || '', response.graph_data);
       }
 
       const botMessage: Message = {

@@ -7,14 +7,14 @@ import './App.css';
 type SidebarType = 'debug' | 'graph' | null;
 
 function App() {
-  const [ontologyContext, setOntologyContext] = useState<any>(null);
-  const [graphContext, setGraphContext] = useState<any>(null);
+  const [vectorAnswer, setVectorAnswer] = useState<string>('');
+  const [graphAnswer, setGraphAnswer] = useState<string>('');
   const [graphData, setGraphData] = useState<any>(null);
   const [activeSidebar, setActiveSidebar] = useState<SidebarType>(null);
 
-  const handleDebugDataUpdate = (ontology: any, graph: any, graphData?: any) => {
-    setOntologyContext(ontology);
-    setGraphContext(graph);
+  const handleDebugDataUpdate = (vectorAnswer: string, graphAnswer: string, graphData?: any) => {
+    setVectorAnswer(vectorAnswer);
+    setGraphAnswer(graphAnswer);
 
     // Only use dedicated graph_data parameter for visualization
     if (graphData) {
@@ -37,8 +37,8 @@ function App() {
   return (
     <div className="App">
       <DebugSidebar
-        ontologyContext={ontologyContext}
-        graphContext={graphContext}
+        vectorAnswer={vectorAnswer}
+        graphAnswer={graphAnswer}
         isOpen={activeSidebar === 'debug'}
         onToggle={() => handleSidebarToggle('debug')}
       />
@@ -48,7 +48,7 @@ function App() {
         onToggle={() => handleSidebarToggle('graph')}
       />
       <header className="app-header">
-        <h1>Self-Optimizing Agents - FHIR Graph RAG</h1>
+        <h1>Self-Optimizing Agents</h1>
       </header>
       <main>
         <ChatContainer onDebugDataUpdate={handleDebugDataUpdate} />

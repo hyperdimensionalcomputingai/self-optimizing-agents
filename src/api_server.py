@@ -10,10 +10,12 @@ import uvicorn
 from dotenv import load_dotenv
 
 from baml_client.async_client import b
-from rag import (
+from self_optimizing_agents import (
     answer_question,
     execute_vector_and_fts_rag,
     prune_schema,
+    generate_ui_response,
+    generate_ui_response_with_details,
 )
 from utils import KuzuDatabaseManager
 
@@ -43,8 +45,8 @@ class QueryRequest(BaseModel):
 
 class QueryResponse(BaseModel):
     response: str
-    ontology_context: Optional[dict] = None
-    graph_context_str: Optional[str] = None
+    vector_answer: Optional[str] = None
+    graph_answer: Optional[str] = None
     graph_data: Optional[dict] = None
 
 # Initialize database manager
@@ -64,25 +66,51 @@ async def read_root():
 
 @app.post("/query", response_model=QueryResponse)
 async def query_endpoint(request: QueryRequest):
-    """Main query endpoint that runs the hybrid RAG pipeline"""
+    """Main query endpoint that runs the self-optimizing agents pipeline with prompt optimization"""
     try:
         question = request.query
         
-        # Step 1: Prune schema
+        # Use the UI-specific response generator that includes prompt optimization and returns details
+        synthesized_answer, vector_answer, graph_answer = await generate_ui_response_with_details(question)
+        
+        # For UI calls, we return the synthesized answer along with vector and graph answers
+        return QueryResponse(
+            response=synthesized_answer or "No answer generated",
+            vector_answer=vector_answer,
+            graph_answer=graph_answer,
+            graph_data={}
+        )
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/health")
+async def health_check():
+    """Health check endpoint"""
+    return {"status": "healthy", "service": "Self-Optimizing Agents API"}
+
+
+@app.post("/query-detailed", response_model=QueryResponse)
+async def query_detailed_endpoint(request: QueryRequest):
+    """Detailed query endpoint that provides full RAG pipeline information with prompt optimization"""
+    try:
+        question = request.query
+        
+        # Step 1: Prune schema using self-optimizing agents
         pruned_schema_xml = await prune_schema(question)
         
-        # Step 2: Extract entities
+        # Step 2: Extract entities using self-optimizing agents
         entities = await b.ExtractEntityKeywords(question, pruned_schema_xml)
         important_entities = " ".join(
             [f"{entity.key} {entity.value}".replace("_", " ") for entity in entities]
         )
         
-        # Step 3: Generate vector/FTS context
+        # Step 3: Generate vector/FTS context using self-optimizing agents
         vector_context = await execute_vector_and_fts_rag(
             question, pruned_schema_xml, important_entities
         )
         
-        # Step 4: Generate Cypher and graph answer
+        # Step 4: Generate Cypher and graph answer using self-optimizing agents
         cypher_response = await b.Text2Cypher(question, pruned_schema_xml, important_entities)
         
         graph_context = ""
@@ -102,11 +130,11 @@ async def query_endpoint(request: QueryRequest):
                 "result": result
             }
         
-        # Generate answers
+        # Generate answers using self-optimizing agents
         graph_answer = await answer_question(question, graph_context)
         vector_answer = await answer_question(question, vector_context)
         
-        # Step 5: Synthesize final answer
+        # Step 5: Synthesize final answer using self-optimizing agents
         synthesized_answer = await b.SynthesizeAnswers(question, vector_answer, graph_answer)
         
         return QueryResponse(
@@ -118,11 +146,6 @@ async def query_endpoint(request: QueryRequest):
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
-@app.get("/health")
-async def health_check():
-    """Health check endpoint"""
-    return {"status": "healthy", "service": "Self-Optimizing Agents API"}
 
 @app.get("/{full_path:path}")
 async def serve_react_app(full_path: str):
