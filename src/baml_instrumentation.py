@@ -242,13 +242,16 @@ class BAMLInstrumentation:
             log = self.collector.last
             call = log.calls[0] if log.calls else None
             
+            # Always create basic metadata
+            metadata = {
+                "function_name": log.function_name,
+                "duration_ms": call.timing.duration_ms if call and call.timing else None,
+                "collector_name": self.collector_name,
+                **additional_metadata
+            }
+            
             if call and call.usage:
-                metadata = {
-                    "function_name": log.function_name,
-                    "duration_ms": call.timing.duration_ms if call.timing else None,
-                    **additional_metadata
-                }
-                
+                # Add usage data if available
                 usage = {
                     "prompt_tokens": call.usage.input_tokens,
                     "completion_tokens": call.usage.output_tokens,
@@ -269,6 +272,12 @@ class BAMLInstrumentation:
                     provider=call.provider,
                     model=call.client_name,
                     total_cost=cost,
+                )
+            else:
+                # Update span with basic metadata even without usage data
+                opik_context.update_current_span(
+                    name=span_name,
+                    metadata=metadata,
                 )
 
 

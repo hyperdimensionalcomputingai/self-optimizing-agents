@@ -224,3 +224,37 @@ The dashboard provides interactive visualizations that help you understand:
 For detailed information about the instrumentation and guardrails implementation, see:
 - [BAML Instrumentation Guide](src/BAML_INSTRUMENTATION_README.md)
 - [Guardrails Implementation](src/GUARDRAILS_README.md)
+
+## Web UI
+
+The project includes a React-based web interface for interactive exploration of the FHIR Graph RAG system.
+
+### Features
+
+- **Interactive Chat Interface**: Query the FHIR dataset using natural language
+- **Real-time Graph Visualization**: View graph data and Cypher queries
+- **Debug Sidebar**: Examine ontology context and graph context
+- **Hybrid RAG Integration**: Combines graph, vector, and FTS search
+
+### Getting Started
+
+The UI uses `just` for task management. Install it with `brew install just` if you haven't already.
+
+**Production mode (single command):**
+```bash
+just start
+```
+The UI and API will both be available at [http://localhost:8001](http://localhost:8001)
+
+**Development mode (separate terminals):**
+```bash
+# Terminal 1: Start backend
+just api
+
+# Terminal 2: Start frontend  
+just ui-dev
+```
+
+In development mode, the UI will be available at [http://localhost:8172](http://localhost:8172) and the API at [http://localhost:8001](http://localhost:8001).
+
+For more details, see the [UI README](src/ui/README.md).

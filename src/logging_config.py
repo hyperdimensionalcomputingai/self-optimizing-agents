@@ -39,18 +39,19 @@ def setup_logging(
     # Create formatter
     formatter = logging.Formatter(log_format)
     
-    # Get root logger
-    logger = logging.getLogger()
-    logger.setLevel(numeric_level)
+    # Create a separate logger for the application instead of configuring root logger
+    # This allows httpx and other libraries to keep their default logging behavior
+    app_logger = logging.getLogger("self_optimizing_agents")
+    app_logger.setLevel(numeric_level)
     
     # Clear any existing handlers to avoid duplicates
-    logger.handlers.clear()
+    app_logger.handlers.clear()
     
     # Console handler
     console_handler = logging.StreamHandler(sys.stdout)
     console_handler.setLevel(numeric_level)
     console_handler.setFormatter(formatter)
-    logger.addHandler(console_handler)
+    app_logger.addHandler(console_handler)
     
     # File handler (if specified)
     if log_file:
@@ -58,11 +59,14 @@ def setup_logging(
             file_handler = logging.FileHandler(log_file)
             file_handler.setLevel(numeric_level)
             file_handler.setFormatter(formatter)
-            logger.addHandler(file_handler)
+            app_logger.addHandler(file_handler)
         except Exception as e:
-            logger.warning(f"Failed to create file handler for {log_file}: {e}")
+            app_logger.warning(f"Failed to create file handler for {log_file}: {e}")
     
-    return logger
+    # Ensure the logger propagates to parent loggers (but we're not configuring root)
+    app_logger.propagate = False
+    
+    return app_logger
 
 
 def get_logger(name: str) -> logging.Logger:
@@ -75,7 +79,11 @@ def get_logger(name: str) -> logging.Logger:
     Returns:
         Logger instance
     """
-    return logging.getLogger(name)
+    # Use the application logger as the parent for all module loggers
+    if name == "__main__":
+        return logging.getLogger("self_optimizing_agents")
+    else:
+        return logging.getLogger(f"self_optimizing_agents.{name}")
 
 
 # Initialize logging when module is imported

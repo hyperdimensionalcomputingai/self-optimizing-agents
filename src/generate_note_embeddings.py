@@ -24,8 +24,8 @@ class Note(LanceModel):
 
 
 def main(db_path: str, limit: int = 10000) -> None:
-    NOTES_DATA_PATH = "../data/note.json"
-    RECORDS_DATA_PATH = "../data/extracted_fhir.json"
+    NOTES_DATA_PATH = "data/note.json"
+    RECORDS_DATA_PATH = "data/extracted_fhir.json"
     TABLE_NAME = "notes"
 
     db = lancedb.connect(db_path)
@@ -51,7 +51,7 @@ def main(db_path: str, limit: int = 10000) -> None:
 
 
 if __name__ == "__main__":
-    DB_PATH = "./fhir_lance_db"
+    DB_PATH = "fhir_lance_db"
     LIMIT = 10000
     main(DB_PATH, LIMIT)
 

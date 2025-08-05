@@ -48,7 +48,7 @@ OPIK_PROJECT_NAME = "ODSC-RAG"
 os.environ["METRICS_SAMPLE_RATE"] = "0.05"  # 5% of calls will run metrics
 
 # Configure BAML logging
-os.environ["BAML_LOG"] = "WARN"
+os.environ["BAML_LOG"] = "OFF"
 
 # Configure guardrails
 GUARDRAILS_ENABLED = os.environ.get("GUARDRAILS_ENABLED", "true").lower() == "true"
@@ -255,7 +255,6 @@ async def extract_entity_keywords(question: str, pruned_schema_xml: str):
         "extract_entity_keywords",
         question,
         pruned_schema_xml,
-        additional_metadata={"entities_extracted": lambda: len(entities)}
     )
 
     # Convert entities to a string representation for metrics
@@ -266,10 +265,10 @@ async def extract_entity_keywords(question: str, pruned_schema_xml: str):
         "extract_entity_keywords_collector",
         "extract_entity_keywords",
         input=question,
-        output=question,  # The question is what we're checking
+        output=entities_str,  # The extracted entities are the output
         context=[pruned_schema_xml],
         metrics=[
-            {"type": "Contains", "params": {"output": question, "reference": entities_str}}
+            {"type": "Contains", "params": {"reference": question}}
         ]
     )
 
@@ -361,39 +360,57 @@ async def synthesize_answers(question: str, vector_answer: str, graph_answer: st
             }
         )
     
-    # Get structured prompt data directly from OptimizedSynthesizeAnswers
-    prompt_data = await b.OptimizedSynthesizeAnswers(
+    # Use track_baml_call for proper instrumentation
+    prompt_data = await track_baml_call(
+        b.OptimizedSynthesizeAnswers,
+        "synthesize_answers_collector",
+        "synthesize_answers",
         question,
         vector_answer,
-        graph_answer
+        graph_answer,
     )
     
-    # Create span metadata with BAML type information
-    try:
-        additional_metadata = {
-            "model_used": "OpenRouterGoogleGemini2FlashGenerate",
-            "client_name": "OpenRouterGoogleGemini2FlashGenerate",
-            "provider": "openrouter",
-        }
-        
-        span_metadata = create_span_metadata_with_baml_info(
-            prompt_data=prompt_data,
-            baml_type_class=baml_types.PromptOptimizationData,
-            additional_metadata=additional_metadata
-        )
-        
-        # Update the current span with structured prompt data for future optimization
-        opik_context.update_current_span(
-            name="synthesize_answers",
-            metadata=span_metadata
-        )
-        print(f"[INFO] BAML prompt optimization data added to span metadata (length: {len(prompt_data.full_prompt)})")
-    except Exception as e:
-        print(f"[WARNING] Failed to add BAML prompt optimization data to span: {e}")
+    # Extract the actual answer from the PromptOptimizationData object
+    synthesized_answer = prompt_data.final_answer_prompt
     
-    # For now, we need to extract the actual synthesized answer from the prompt data
-    # This is a temporary solution - ideally the function would return both the answer and the prompt data
-    synthesized_answer = prompt_data.final_answer_prompt  # This is not ideal, but works for now
+    # Apply output guardrails if enabled
+    if GUARDRAILS_ENABLED:
+        try:
+            # Use enhanced guardrail manager for better tracing
+            processed_answer = await enhanced_guardrail_manager.validate_with_detailed_tracing(
+                synthesized_answer,
+                span_name=f"output_guardrail_validation_q{question_number}" if question_number else "output_guardrail_validation",
+                trace_tags=["rag_output", "email_validation"],
+                custom_metadata={
+                    "question_number": question_number,
+                    "workflow_step": "output_validation",
+                    "rag_type": "hybrid",
+                    "answer_length": len(synthesized_answer)
+                },
+                validation_type="output"
+            )
+            
+            if processed_answer != synthesized_answer:
+                print(f"[INFO] Output processed by guardrails")
+                synthesized_answer = processed_answer
+                
+        except Exception as e:
+            print(f"[WARNING] Output guardrail validation failed: {e}")
+    
+    # Run metrics after the BAML call completes
+    await run_post_call_metrics(
+        "synthesize_answers_collector",
+        "synthesize_answers",
+        input=question,
+        output=synthesized_answer,
+        context=[graph_answer + vector_answer],
+        metrics=[
+            {"type": "Hallucination", "params": {"model": "openrouter/openai/gpt-4o"}},
+            {"type": "AnswerRelevance", "params": {"model": "openrouter/openai/gpt-4o"}},
+            {"type": "Moderation", "params": {"model": "openrouter/openai/gpt-4o"}},
+            {"type": "Usefulness", "params": {"model": "openrouter/openai/gpt-4o"}},
+        ]
+    )
     
     return synthesized_answer
 
@@ -401,7 +418,7 @@ async def synthesize_answers(question: str, vector_answer: str, graph_answer: st
 # Evaluation Functions
 @conditional_opik_track(flush=True)
 async def generate_response(question: str, question_number: int = None) -> str | None:
-    graph_answer, vector_answer = await run_hybrid_rag(question, question_number)
+    vector_answer, graph_answer = await run_hybrid_rag(question, question_number)
     synthesized_answer = await synthesize_answers(question, vector_answer, graph_answer, question_number)
     
 

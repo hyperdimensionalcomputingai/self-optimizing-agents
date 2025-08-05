@@ -403,6 +403,6 @@ def main(data_path: str) -> None:
 
 
 if __name__ == "__main__":
-    DB_NAME = "fhir_kuzu_db"
-    DATA_PATH = "../data/extracted_fhir.json"
+    DB_NAME = "fhir_db.kuzu"
+    DATA_PATH = "data/extracted_fhir.json"
     main(DATA_PATH)
