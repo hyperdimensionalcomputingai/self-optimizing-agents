@@ -1,33 +1,19 @@
 import React, { useState } from 'react';
 import ChatContainer from './components/ChatContainer';
 import DebugSidebar from './components/DebugSidebar';
-import GraphVisualizationSidebar from './components/GraphVisualizationSidebar';
 import './App.css';
 
-type SidebarType = 'debug' | 'graph' | null;
+type SidebarType = 'debug' | null;
 
 function App() {
   const [vectorAnswer, setVectorAnswer] = useState<string>('');
   const [graphAnswer, setGraphAnswer] = useState<string>('');
-  const [graphData, setGraphData] = useState<any>(null);
   const [activeSidebar, setActiveSidebar] = useState<SidebarType>(null);
 
   const handleDebugDataUpdate = (vectorAnswer: string, graphAnswer: string, graphData?: any) => {
     setVectorAnswer(vectorAnswer);
     setGraphAnswer(graphAnswer);
-
-    // Only use dedicated graph_data parameter for visualization
-    if (graphData) {
-      if (Array.isArray(graphData)) {
-        setGraphData(graphData);
-      } else if (graphData.nodes && graphData.edges) {
-        setGraphData(graphData);
-      } else {
-        setGraphData(null);
-      }
-    } else {
-      setGraphData(null);
-    }
+    // graphData is no longer used since visualization is removed
   };
 
   const handleSidebarToggle = (sidebarType: SidebarType) => {
@@ -41,11 +27,6 @@ function App() {
         graphAnswer={graphAnswer}
         isOpen={activeSidebar === 'debug'}
         onToggle={() => handleSidebarToggle('debug')}
-      />
-      <GraphVisualizationSidebar
-        graphData={graphData}
-        isOpen={activeSidebar === 'graph'}
-        onToggle={() => handleSidebarToggle('graph')}
       />
       <header className="app-header">
         <h1>Self-Optimizing Agents</h1>

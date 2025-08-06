@@ -37,7 +37,6 @@ from prompt_optimization import collect_response_with_metrics, prompt_optimizer
 from baml_request_extractor import extract_request_from_collector, get_prompt_from_request, get_model_from_request
 from baml_metadata_extractor import create_span_metadata_with_baml_info
 from baml_client import types as baml_types
-from opik_utils import conditional_opik_track, is_opik_tracking_enabled, get_opik_tracking_status
 from logging_config import get_logger
 
 # Load environment variables
@@ -45,13 +44,13 @@ load_dotenv()
 OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY")
 OPIK_API_KEY = os.environ.get("OPIK_API_KEY")
 OPIK_WORKSPACE = os.environ.get("OPIK_WORKSPACE")
-OPIK_PROJECT_NAME = os.getenv("OPIK_PROJECT_NAME")
+OPIK_PROJECT_NAME = os.environ.get("OPIK_PROJECT_NAME", "ODSC-RAG")  # Default to ODSC-RAG if not set
 
 # Initialize logger
 logger = get_logger(__name__)
 
 # Set a reasonable sample rate for metrics to avoid overwhelming the system
-os.environ["METRICS_SAMPLE_RATE"] = "0.05"  # 5% of calls will run metrics
+os.environ["METRICS_SAMPLE_RATE"] = os.environ.get("METRICS_SAMPLE_RATE", "0.05")  # Default to 5% if not set
 
 # Configure BAML logging
 os.environ["BAML_LOG"] = "OFF"
@@ -138,6 +137,8 @@ async def store_prompt_in_function_dataset(function_name: str, question: str, an
     except Exception as e:
         logger.warning(f"Failed to store prompt in function-specific dataset {function_name}: {e}")
 
+
+
 # Set embedding registry in LanceDB to use ollama
 embedding_model = get_registry().get("ollama").create(name="nomic-embed-text")
 kuzu_db_manager = utils.KuzuDatabaseManager("fhir_db.kuzu")
@@ -175,15 +176,11 @@ else:
     opik.configure(use_local=True)
     logger.info("Opik configured for local tracking (no cloud credentials)")
 
-# Print Opik tracking status
-tracking_status = get_opik_tracking_status()
-logger.info(f"Opik tracking enabled: {tracking_status['enabled']}")
-if not tracking_status['enabled']:
-    logger.info("Note: Opik tracking is disabled via OPIK_TRACKING_ENABLED environment variable")
+
 
 
 # Core RAG Functions
-@conditional_opik_track(flush=True)
+@opik.track(flush=True)
 async def prune_schema(question: str) -> str:
     schema = kuzu_db_manager.get_schema_dict
     schema_xml = kuzu_db_manager.get_schema_xml(schema)
@@ -204,10 +201,6 @@ async def prune_schema(question: str) -> str:
     
     if baml_collector:
         try:
-            from baml_request_extractor import extract_request_from_collector, get_prompt_from_request, get_model_from_request
-            from baml_metadata_extractor import create_span_metadata_with_baml_info
-            from baml_client import types as baml_types
-            
             # Extract request data from the BAML collector
             request_data = extract_request_from_collector(baml_collector, "PruneSchema")
             
@@ -307,7 +300,7 @@ async def prune_schema(question: str) -> str:
     return pruned_schema_xml
 
 
-@conditional_opik_track(flush=True)
+@opik.track(flush=True)
 async def answer_question(question: str, context: str) -> str:
     answer, baml_collector = await track_baml_call(
         b.AnswerQuestion,
@@ -321,8 +314,6 @@ async def answer_question(question: str, context: str) -> str:
     # Extract request data for prompt optimization
     if baml_collector:
         try:
-            from baml_request_extractor import extract_request_from_collector, get_prompt_from_request, get_model_from_request
-            
             # Extract request data from the BAML collector
             request_data = extract_request_from_collector(baml_collector, "AnswerQuestion")
             
@@ -366,7 +357,7 @@ async def answer_question(question: str, context: str) -> str:
     return answer
 
 
-@conditional_opik_track(flush=True)
+@opik.track(flush=True)
 async def execute_graph_rag(question: str, schema_xml: str, important_entities: str) -> str:
     response_cypher, baml_collector = await track_baml_call(
         b.Text2Cypher,
@@ -393,8 +384,6 @@ async def execute_graph_rag(question: str, schema_xml: str, important_entities: 
     # Extract request data for prompt optimization
     if baml_collector:
         try:
-            from baml_request_extractor import extract_request_from_collector, get_prompt_from_request, get_model_from_request
-            
             # Extract request data from the BAML collector
             request_data = extract_request_from_collector(baml_collector, "Text2Cypher")
             
@@ -463,7 +452,7 @@ async def execute_graph_rag(question: str, schema_xml: str, important_entities: 
     return answer
 
 
-@conditional_opik_track(flush=True)
+@opik.track(flush=True)
 async def execute_vector_and_fts_rag(
     question: str, schema_xml: str, important_entities: str, top_k: int = 2
 ) -> str:
@@ -512,17 +501,17 @@ async def execute_vector_and_fts_rag(
     return context
 
 
-@conditional_opik_track(flush=True)
+@opik.track(flush=True)
 async def get_vector_context(question, pruned_schema_xml, important_entities, top_k=2):
     return await execute_vector_and_fts_rag(question, pruned_schema_xml, important_entities, top_k)
 
 
-@conditional_opik_track(flush=True)
+@opik.track(flush=True)
 async def get_graph_answer(question, pruned_schema_xml, important_entities):
     return await execute_graph_rag(question, pruned_schema_xml, important_entities)
 
 
-@conditional_opik_track(flush=True)
+@opik.track(flush=True)
 async def extract_entity_keywords(question: str, pruned_schema_xml: str):
     entities, baml_collector = await track_baml_call(
         b.ExtractEntityKeywords,
@@ -536,10 +525,6 @@ async def extract_entity_keywords(question: str, pruned_schema_xml: str):
     # Extract request data for prompt optimization with full BAML metadata
     if baml_collector:
         try:
-            from baml_request_extractor import extract_request_from_collector, get_prompt_from_request, get_model_from_request
-            from baml_metadata_extractor import create_span_metadata_with_baml_info
-            from baml_client import types as baml_types
-            
             # Extract request data from the BAML collector
             request_data = extract_request_from_collector(baml_collector, "ExtractEntityKeywords")
             
@@ -630,23 +615,25 @@ async def extract_entity_keywords(question: str, pruned_schema_xml: str):
         except Exception as e:
             logger.warning(f"Failed to extract entity keywords request data: {e}")
 
-    # Run post-call metrics for entity extraction
+    # Convert entities to a string representation for metrics
     entities_str = "\n".join([f"- key: {entity.key}\n  value: {entity.value}" for entity in entities])
+    
+    # Use Opik Contains metric to check if the question contains the extracted entities
     await run_post_call_metrics(
         "extract_entity_keywords_collector",
         "extract_entity_keywords",
         input=question,
-        output=entities_str,  # The extracted entities are the output
+        output=question,  # The question is what we're checking
         context=[pruned_schema_xml],
         metrics=[
-            {"type": "Contains", "params": {"reference": question}}
+            {"type": "Contains", "params": {"output": question, "reference": entities_str}}
         ]
     )
 
     return entities
 
 
-@conditional_opik_track(flush=True)
+@opik.track(flush=True)
 async def run_hybrid_rag(question: str, question_number: int = None) -> tuple[str, str]:
     logger.info(f"---\nQuestion {question_number}: {question}")
     
@@ -708,8 +695,11 @@ async def run_hybrid_rag(question: str, question_number: int = None) -> tuple[st
     return vector_answer, graph_answer
 
 
-@conditional_opik_track(flush=True)
+@opik.track(flush=True)
 async def synthesize_answers(question: str, vector_answer: str, graph_answer: str, question_number: int = None) -> str:
+    # Import opik_context at the beginning to avoid UnboundLocalError
+    from opik import opik_context
+    
     # Simple manual comparison of vector and graph answers
     if vector_answer and graph_answer:
         # Basic consistency check
@@ -731,7 +721,6 @@ async def synthesize_answers(question: str, vector_answer: str, graph_answer: st
             }
         )
     
-    # Use track_baml_call for proper instrumentation with collector return for request extraction
     prompt_data, baml_collector = await track_baml_call(
         b.OptimizedSynthesizeAnswers,
         "synthesize_answers_collector",
@@ -745,13 +734,10 @@ async def synthesize_answers(question: str, vector_answer: str, graph_answer: st
     # Extract the actual answer from the PromptOptimizationData object
     synthesized_answer = prompt_data.final_answer_prompt
     
-    # Extract request data for prompt optimization with full BAML metadata
+    # Extract metadata from the prompt_data object for upcoming work
+    # This is done after the main BAML call to avoid interfering with metrics
     if baml_collector:
         try:
-            from baml_request_extractor import extract_request_from_collector, get_prompt_from_request, get_model_from_request
-            from baml_metadata_extractor import create_span_metadata_with_baml_info
-            from baml_client import types as baml_types
-            
             # Extract request data from the BAML collector
             request_data = extract_request_from_collector(baml_collector, "OptimizedSynthesizeAnswers")
             
@@ -760,7 +746,7 @@ async def synthesize_answers(question: str, vector_answer: str, graph_answer: st
                 extracted_prompt = get_prompt_from_request(request_data)
                 extracted_model = get_model_from_request(request_data)
                 
-                logger.info(f"Extracted request data: model={extracted_model}, prompt_length={len(extracted_prompt) if extracted_prompt else 0}")
+                logger.info(f"Extracted synthesize answers request data: model={extracted_model}, prompt_length={len(extracted_prompt) if extracted_prompt else 0}")
                 
                 # Get full BAML metadata with field descriptions and structured analysis
                 try:
@@ -777,7 +763,12 @@ async def synthesize_answers(question: str, vector_answer: str, graph_answer: st
                                 "extracted_model": extracted_model,
                                 "request_url": request_data.url,
                                 "request_method": request_data.method,
-                                "workflow_step": "synthesize_answers"
+                                "workflow_step": "synthesize_answers",
+                                "function_name": "OptimizedSynthesizeAnswers",
+                                "has_prompt_content": bool(extracted_prompt),
+                                "question": question,
+                                "vector_answer_length": len(vector_answer),
+                                "graph_answer_length": len(graph_answer)
                             }
                         )
                         
@@ -798,7 +789,12 @@ async def synthesize_answers(question: str, vector_answer: str, graph_answer: st
                                 "extracted_model": extracted_model,
                                 "request_url": request_data.url,
                                 "request_method": request_data.method,
-                                "workflow_step": "synthesize_answers"
+                                "workflow_step": "synthesize_answers",
+                                "function_name": "OptimizedSynthesizeAnswers",
+                                "has_prompt_content": bool(extracted_prompt),
+                                "question": question,
+                                "vector_answer_length": len(vector_answer),
+                                "graph_answer_length": len(graph_answer)
                             }
                         )
                         
@@ -812,7 +808,12 @@ async def synthesize_answers(question: str, vector_answer: str, graph_answer: st
                             "extracted_model": extracted_model,
                             "request_url": request_data.url,
                             "request_method": request_data.method,
-                            "workflow_step": "synthesize_answers"
+                            "workflow_step": "synthesize_answers",
+                            "function_name": "OptimizedSynthesizeAnswers",
+                            "has_prompt_content": bool(extracted_prompt),
+                            "question": question,
+                            "vector_answer_length": len(vector_answer),
+                            "graph_answer_length": len(graph_answer)
                         }
                     )
                 
@@ -821,7 +822,7 @@ async def synthesize_answers(question: str, vector_answer: str, graph_answer: st
                     await store_prompt_in_function_dataset(
                         "OptimizedSynthesizeAnswers",
                         question,
-                        synthesized_answer,
+                        synthesized_answer,  # Use the synthesized answer as the result
                         extracted_prompt,
                         extracted_model,
                         {
@@ -829,14 +830,16 @@ async def synthesize_answers(question: str, vector_answer: str, graph_answer: st
                             "request_method": request_data.method,
                             "workflow_step": "synthesize_answers",
                             "baml_type_name": "PromptOptimizationData",
-                            "has_structured_metadata": True
+                            "has_structured_metadata": True,
+                            "vector_answer_length": len(vector_answer),
+                            "graph_answer_length": len(graph_answer)
                         }
                     )
-                    
-                    logger.debug(f"Extracted prompt: {extracted_prompt[:200]}...")
-                    
+                
         except Exception as e:
-            logger.warning(f"Failed to extract request data: {e}")
+            logger.warning(f"Failed to extract synthesize answers request data: {e}")
+    
+
     
     # Apply output guardrails if enabled
     if GUARDRAILS_ENABLED:
@@ -874,7 +877,6 @@ async def synthesize_answers(question: str, vector_answer: str, graph_answer: st
             {"type": "AnswerRelevance", "params": {"model": "openrouter/openai/gpt-4o"}},
             {"type": "Moderation", "params": {"model": "openrouter/openai/gpt-4o"}},
             {"type": "Usefulness", "params": {"model": "openrouter/openai/gpt-4o"}},
-            {"type": "Contains", "params": {"reference": graph_answer + " " + vector_answer}},
         ]
     )
     
@@ -882,7 +884,7 @@ async def synthesize_answers(question: str, vector_answer: str, graph_answer: st
 
 
 # Evaluation Functions
-@conditional_opik_track(flush=True)
+@opik.track(flush=True)
 async def generate_response(question: str, question_number: int = None) -> str | None:
     """Generate response for individual calls (UI or evaluation) with prompt optimization."""
     vector_answer, graph_answer = await run_hybrid_rag(question, question_number)
@@ -931,7 +933,7 @@ async def generate_response(question: str, question_number: int = None) -> str |
     return synthesized_answer
 
 
-@conditional_opik_track(flush=True)
+@opik.track(flush=True)
 async def generate_ui_response(question: str) -> str | None:
     """Generate response specifically for UI calls with prompt optimization."""
     # Create a trace for UI calls
@@ -948,7 +950,7 @@ async def generate_ui_response(question: str) -> str | None:
     # Use the same logic as generate_response but without question_number
     return await generate_response(question, question_number=None)
 
-@conditional_opik_track(flush=True)
+@opik.track(flush=True)
 async def generate_ui_response_with_details(question: str) -> tuple[str | None, str, str]:
     """Generate response with vector and graph answers for UI calls."""
     # Create a trace for UI calls
@@ -971,7 +973,11 @@ async def generate_ui_response_with_details(question: str) -> tuple[str | None, 
     return synthesized_answer, vector_answer, graph_answer
 
 
-@conditional_opik_track(flush=True)
+
+
+
+
+@opik.track(flush=True)
 async def run_evaluation() -> None:
     """Run the evaluation suite with predefined questions."""
     questions = [

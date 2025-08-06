@@ -13,5 +13,5 @@ export interface QueryResponse {
   response: string;
   vector_answer?: string;
   graph_answer?: string;
-  graph_data?: any;
+  // graph_data removed - no longer providing graph visualization
 }

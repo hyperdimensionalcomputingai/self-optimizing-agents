@@ -24,8 +24,8 @@ load_dotenv()
 
 # Set environment variables for BAML and API keys
 os.environ["BAML_LOG"] = "WARN"
-os.environ["OPENROUTER_API_KEY"] = os.getenv("OPENROUTER_API_KEY")
-os.environ["METRICS_SAMPLE_RATE"] = "0.05"
+os.environ["OPENROUTER_API_KEY"] = os.environ.get("OPENROUTER_API_KEY")
+os.environ["METRICS_SAMPLE_RATE"] = os.environ.get("METRICS_SAMPLE_RATE", "0.05")  # Default to 5% if not set
 
 # Initialize FastAPI app
 app = FastAPI(title="Self-Optimizing Agents API", version="1.0.0")
@@ -47,7 +47,7 @@ class QueryResponse(BaseModel):
     response: str
     vector_answer: Optional[str] = None
     graph_answer: Optional[str] = None
-    graph_data: Optional[dict] = None
+    # graph_data removed - no longer providing graph visualization
 
 # Initialize database manager
 kuzu_db_manager = KuzuDatabaseManager("fhir_db.kuzu")
@@ -69,19 +69,39 @@ async def query_endpoint(request: QueryRequest):
     """Main query endpoint that runs the self-optimizing agents pipeline with prompt optimization"""
     try:
         question = request.query
+        print(f"DEBUG: Processing query: {question}")
         
         # Use the UI-specific response generator that includes prompt optimization and returns details
-        synthesized_answer, vector_answer, graph_answer = await generate_ui_response_with_details(question)
+        result = await generate_ui_response_with_details(question)
+        print(f"DEBUG: Result type: {type(result)}, Result: {result}")
+        
+        if result is None:
+            raise Exception("generate_ui_response_with_details returned None")
+        
+        if len(result) != 3:
+            raise Exception(f"Expected 3 values, got {len(result)}: {result}")
+        
+        synthesized_answer, vector_answer, graph_answer = result
+        
+        print(f"DEBUG: synthesized_answer: {type(synthesized_answer)} = {synthesized_answer}")
+        print(f"DEBUG: vector_answer: {type(vector_answer)} = {vector_answer}")
+        print(f"DEBUG: graph_answer: {type(graph_answer)} = {graph_answer}")
         
         # For UI calls, we return the synthesized answer along with vector and graph answers
-        return QueryResponse(
+        response = QueryResponse(
             response=synthesized_answer or "No answer generated",
             vector_answer=vector_answer,
             graph_answer=graph_answer,
-            graph_data={}
+            graph_data=None  # No longer providing graph data
         )
         
+        print(f"DEBUG: Returning response: {response}")
+        return response
+        
     except Exception as e:
+        import traceback
+        print(f"ERROR: Exception in query_endpoint: {e}")
+        print(f"ERROR: Traceback: {traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/health")
@@ -124,11 +144,8 @@ async def query_detailed_endpoint(request: QueryRequest):
             result = response.get_as_pl().to_dicts()
             graph_context = f"<CYPHER>\n{query}\n</CYPHER>\n<RESULT>\n{result}\n</RESULT>"
             
-            # Prepare graph data for visualization
-            graph_data = {
-                "cypher_query": query,
-                "result": result
-            }
+            # No longer preparing graph data for visualization
+            graph_data = None
         
         # Generate answers using self-optimizing agents
         graph_answer = await answer_question(question, graph_context)
@@ -139,9 +156,8 @@ async def query_detailed_endpoint(request: QueryRequest):
         
         return QueryResponse(
             response=synthesized_answer,
-            ontology_context={"pruned_schema": pruned_schema_xml},
-            graph_context_str=graph_context,
-            graph_data=graph_data
+            vector_answer=vector_answer,
+            graph_answer=graph_answer
         )
         
     except Exception as e:

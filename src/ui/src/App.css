@@ -307,16 +307,69 @@ main {
   font-style: italic;
 }
 
-.graph-stats {
+.graph-info {
   padding: 1rem;
   background-color: #1a1a1a;
-  border-top: 1px solid #ffffff;
+  border-top: 1px solid #444;
   color: #ffffff;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.graph-stats {
+  margin-bottom: 1rem;
+}
+
+.graph-stats h4,
+.node-types h4,
+.cypher-query h4 {
+  margin: 0 0 0.5rem 0;
+  color: #ffff00;
+  font-size: 1rem;
 }
 
 .graph-stats p {
   margin: 0.25rem 0;
   font-size: 0.9rem;
+}
+
+.node-types {
+  margin-bottom: 1rem;
+}
+
+.node-type {
+  display: flex;
+  align-items: center;
+  margin: 0.25rem 0;
+  font-size: 0.9rem;
+}
+
+.node-color-indicator {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  margin-right: 0.5rem;
+  border: 1px solid #666;
+}
+
+.cypher-query {
+  margin-bottom: 1rem;
+}
+
+.cypher-query pre {
+  background-color: #2a2a2a;
+  padding: 0.5rem;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  border: 1px solid #444;
+}
+
+.no-graph-data .error {
+  color: #ff6b6b;
+  font-weight: bold;
 }
 
 .graph-sidebar-toggle {

@@ -36,7 +36,7 @@ const ChatContainer: React.FC<ChatContainerProps> = ({ onDebugDataUpdate }) => {
       const response = await queryAPI(messageText);
 
       if (onDebugDataUpdate) {
-        onDebugDataUpdate(response.vector_answer || '', response.graph_answer || '', response.graph_data);
+        onDebugDataUpdate(response.vector_answer || '', response.graph_answer || '', undefined);
       }
 
       const botMessage: Message = {

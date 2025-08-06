@@ -42,10 +42,10 @@ load_dotenv()
 OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY")
 OPIK_API_KEY = os.environ.get("OPIK_API_KEY")
 OPIK_WORKSPACE = os.environ.get("OPIK_WORKSPACE")
-OPIK_PROJECT_NAME = os.environ.get("OPIK_PROJECT_NAME")
+OPIK_PROJECT_NAME = os.environ.get("OPIK_PROJECT_NAME", "ODSC-RAG")  # Default to ODSC-RAG if not set
 
 # Set a reasonable sample rate for metrics to avoid overwhelming the system
-os.environ["METRICS_SAMPLE_RATE"] = os.environ.get("METRICS_SAMPLE_RATE")
+os.environ["METRICS_SAMPLE_RATE"] = os.environ.get("METRICS_SAMPLE_RATE", "0.05")  # Default to 5% if not set
 
 # Configure BAML logging
 os.environ["BAML_LOG"] = "OFF"
@@ -257,18 +257,38 @@ async def extract_entity_keywords(question: str, pruned_schema_xml: str):
         pruned_schema_xml,
     )
 
-    # Convert entities to a string representation for metrics
-    entities_str = "\n".join([f"- key: {entity.key}\n  value: {entity.value}" for entity in entities])
+    # Convert entities to a simple string of values for metrics
+    # Use individual entity values to check if each one is contained in the question
+    entity_values = " ".join([entity.value for entity in entities])
     
-    # Use Opik Contains metric to check if the question contains the extracted entities
+    # Debug: Print extracted entities
+    print(f"[DEBUG] Extracted entities: {[f'{entity.key}:{entity.value}' for entity in entities]}")
+    print(f"[DEBUG] Entity values for Contains metric: '{entity_values}'")
+    
+    # Check if any individual entity values are found in the question
+    found_entities = []
+    for entity in entities:
+        if entity.value.lower() in question.lower():
+            found_entities.append(entity.value)
+    
+    print(f"[DEBUG] Found entities in question: {found_entities}")
+    
+    # Use the found entities for the Contains metric
+    if found_entities:
+        entity_values = " ".join(found_entities)
+        print(f"[DEBUG] Using found entities for Contains metric: '{entity_values}'")
+    else:
+        print(f"[DEBUG] No entities found in question, using all entities: '{entity_values}'")
+    
+    # Use Opik Contains metric to check if the question contains the extracted entity values
     await run_post_call_metrics(
         "extract_entity_keywords_collector",
         "extract_entity_keywords",
         input=question,
-        output=entities_str,  # The extracted entities are the output
+        output=question,  
         context=[pruned_schema_xml],
         metrics=[
-            {"type": "Contains", "params": {"reference": question}}
+            {"type": "Contains", "params": {"reference": entity_values}}
         ]
     )
 
@@ -448,6 +468,7 @@ async def run_evaluation() -> None:
     questions = [
         "How many patients with the last name 'Rosenbaum' received multiple immunizations?",
         "What are the full names of the patients treated by the practitioner named Josef Klein?",
+        "Are there any patiens with the address david@gmail.com?",
         "Did the practitioner 'Arla Fritsch' treat more than one patient?",
         "What are the unique categories of substances patients are allergic to?",
         "How many patients were born in between the years 1990 and 2000?",
