@@ -35,7 +35,8 @@ from guardrails import (
     validate_output_with_guardrails,
     EnhancedGuardrailManager
 )
-from opik_utils import conditional_opik_track, is_opik_tracking_enabled, get_opik_tracking_status
+import opik
+from opik_utils import is_opik_tracking_enabled, get_opik_tracking_status
 
 # Load environment variables
 load_dotenv()
@@ -109,7 +110,7 @@ if not tracking_status['enabled']:
 
 
 # Core RAG Functions
-@conditional_opik_track(flush=True)
+@opik.track(flush=True)
 async def prune_schema(question: str) -> str:
     schema = kuzu_db_manager.get_schema_dict
     schema_xml = kuzu_db_manager.get_schema_xml(schema)
@@ -127,7 +128,7 @@ async def prune_schema(question: str) -> str:
     return pruned_schema_xml
 
 
-@conditional_opik_track(flush=True)
+@opik.track(flush=True)
 async def answer_question(question: str, context: str) -> str:
     answer = await track_baml_call(
         b.AnswerQuestion,
@@ -139,7 +140,7 @@ async def answer_question(question: str, context: str) -> str:
     return answer
 
 
-@conditional_opik_track(flush=True)
+@opik.track(flush=True)
 async def execute_graph_rag(question: str, schema_xml: str, important_entities: str) -> str:
     response_cypher = await track_baml_call(
         b.Text2Cypher,
@@ -188,7 +189,7 @@ async def execute_graph_rag(question: str, schema_xml: str, important_entities: 
     return answer
 
 
-@conditional_opik_track(flush=True)
+@opik.track(flush=True)
 async def execute_vector_and_fts_rag(
     question: str, schema_xml: str, important_entities: str, top_k: int = 2
 ) -> str:
@@ -237,17 +238,17 @@ async def execute_vector_and_fts_rag(
     return context
 
 
-@conditional_opik_track(flush=True)
+@opik.track(flush=True)
 async def get_vector_context(question, pruned_schema_xml, important_entities, top_k=2):
     return await execute_vector_and_fts_rag(question, pruned_schema_xml, important_entities, top_k)
 
 
-@conditional_opik_track(flush=True)
+@opik.track(flush=True)
 async def get_graph_answer(question, pruned_schema_xml, important_entities):
     return await execute_graph_rag(question, pruned_schema_xml, important_entities)
 
 
-@conditional_opik_track(flush=True)
+@opik.track(flush=True)
 async def extract_entity_keywords(question: str, pruned_schema_xml: str):
     entities = await track_baml_call(
         b.ExtractEntityKeywords,
@@ -280,22 +281,42 @@ async def extract_entity_keywords(question: str, pruned_schema_xml: str):
     else:
         print(f"[DEBUG] No entities found in question, using all entities: '{entity_values}'")
     
-    # Use Opik Contains metric to check if the question contains the extracted entity values
-    await run_post_call_metrics(
-        "extract_entity_keywords_collector",
-        "extract_entity_keywords",
-        input=question,
-        output=question,  
-        context=[pruned_schema_xml],
-        metrics=[
-            {"type": "Contains", "params": {"reference": entity_values}}
-        ]
-    )
+    # Run Contains metric using the same pipeline as other metrics
+    try:
+        from baml_instrumentation import run_post_call_metrics
+        
+        # Run the Contains metric through the same pipeline as other metrics
+        await run_post_call_metrics(
+            "extract_entity_keywords_collector",
+            "extract_entity_keywords",
+            input="",  # No input needed for Contains metric
+            output=question,
+            context=None,
+            metrics=[
+                {
+                    "type": "Contains", 
+                    "params": {
+                        "reference": entity_values
+                    }
+                }
+            ],
+            sample_rate=1.0,  # Always run this metric
+            additional_metadata={
+                "entity_values": entity_values,
+                "found_entities": found_entities,
+                "all_entities": all_entities
+            }
+        )
+        
+        print(f"[DEBUG] Contains metric processed through standard pipeline")
+        
+    except Exception as e:
+        print(f"[WARNING] Failed to run Contains metric: {e}")
 
     return entities
 
 
-@conditional_opik_track(flush=True)
+@opik.track(flush=True)
 async def run_hybrid_rag(question: str, question_number: int = None) -> tuple[str, str]:
     print(f"---\nQuestion {question_number}: {question}")
     
@@ -357,29 +378,8 @@ async def run_hybrid_rag(question: str, question_number: int = None) -> tuple[st
     return vector_answer, graph_answer
 
 
-@conditional_opik_track(flush=True)
+@opik.track(flush=True)
 async def synthesize_answers(question: str, vector_answer: str, graph_answer: str, question_number: int = None) -> str:
-    # Simple manual comparison of vector and graph answers
-    if vector_answer and graph_answer:
-        # Basic consistency check
-        vector_words = set(vector_answer.lower().split())
-        graph_words = set(graph_answer.lower().split())
-        common_words = vector_words.intersection(graph_words)
-        similarity = len(common_words) / max(len(vector_words), len(graph_words)) if max(len(vector_words), len(graph_words)) > 0 else 0
-        
-        print(f"[INFO] Simple similarity score: {similarity:.3f}")
-        
-        # Update Opik context with simple comparison
-        opik_context.update_current_span(
-            name="simple_answer_comparison",
-            metadata={
-                "vector_answer_length": len(vector_answer),
-                "graph_answer_length": len(graph_answer),
-                "simple_similarity_score": similarity,
-                "common_words_count": len(common_words),
-            }
-        )
-    
     # Use track_baml_call for proper instrumentation
     prompt_data = await track_baml_call(
         b.OptimizedSynthesizeAnswers,
@@ -436,7 +436,7 @@ async def synthesize_answers(question: str, vector_answer: str, graph_answer: st
 
 
 # Evaluation Functions
-@conditional_opik_track(flush=True)
+@opik.track(flush=True)
 async def generate_response(question: str, question_number: int = None) -> str | None:
     vector_answer, graph_answer = await run_hybrid_rag(question, question_number)
     synthesized_answer = await synthesize_answers(question, vector_answer, graph_answer, question_number)
@@ -462,7 +462,7 @@ async def generate_response(question: str, question_number: int = None) -> str |
     return synthesized_answer
 
 
-@conditional_opik_track(flush=True)
+@opik.track(flush=True)
 async def run_evaluation() -> None:
     """Run the evaluation suite with predefined questions."""
     questions = [

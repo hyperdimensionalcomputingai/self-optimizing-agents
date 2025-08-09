@@ -70,7 +70,7 @@ if GUARDRAILS_ENABLED:
     ])
 
 # Global storage for extracted prompts across the workflow
-extracted_prompts = {}
+# Note: Prompt extraction is now only done in synthesize_answers function
 
 def store_extracted_prompt(function_name: str, prompt: str, model: str, metadata: dict = None):
     """
@@ -82,15 +82,8 @@ def store_extracted_prompt(function_name: str, prompt: str, model: str, metadata
         model: The model used
         metadata: Additional metadata
     """
-    if function_name not in extracted_prompts:
-        extracted_prompts[function_name] = []
-    
-    extracted_prompts[function_name].append({
-        "prompt": prompt,
-        "model": model,
-        "timestamp": datetime.now().isoformat(),
-        "metadata": metadata or {}
-    })
+    # This function is deprecated - prompt extraction is now only done in synthesize_answers
+    pass
 
 async def store_prompt_in_function_dataset(function_name: str, question: str, answer: str, prompt: str, model: str, metadata: dict = None):
     """
@@ -194,108 +187,8 @@ async def prune_schema(question: str) -> str:
         return_collector=True
     )
 
-    # Extract request data for prompt optimization with full BAML metadata
-    extracted_prompt = None
-    extracted_model = None
-    request_data = None
-    
-    if baml_collector:
-        try:
-            # Extract request data from the BAML collector
-            request_data = extract_request_from_collector(baml_collector, "PruneSchema")
-            
-            if request_data:
-                # Extract prompt and model information
-                extracted_prompt = get_prompt_from_request(request_data)
-                extracted_model = get_model_from_request(request_data)
-                
-                logger.info(f"Extracted prune schema request data: model={extracted_model}, prompt_length={len(extracted_prompt) if extracted_prompt else 0}")
-                
-                # Get full BAML metadata with field descriptions and structured analysis
-                try:
-                    # Get the BAML type class for PruneSchema
-                    baml_type_class = getattr(baml_types, "PrunedSchema", None)
-                    
-                    if baml_type_class and hasattr(pruned_schema, 'model_dump'):
-                        # Create structured metadata with BAML field descriptions
-                        baml_metadata = create_span_metadata_with_baml_info(
-                            pruned_schema,
-                            baml_type_class,
-                            additional_metadata={
-                                "extracted_prompt": extracted_prompt,
-                                "extracted_model": extracted_model,
-                                "request_url": request_data.url,
-                                "request_method": request_data.method,
-                                "workflow_step": "prune_schema",
-                                "function_name": "PruneSchema",
-                                "has_prompt_content": bool(extracted_prompt),
-                            }
-                        )
-                        
-                        # Update Opik context with full BAML metadata
-                        opik_context.update_current_span(
-                            name="pruned_schema",
-                            metadata=baml_metadata
-                        )
-                        
-                        logger.info(f"Added full BAML metadata with {len(baml_metadata)} fields")
-                        
-                    else:
-                        # Fallback to basic metadata if BAML type class not found
-                        opik_context.update_current_span(
-                            name="pruned_schema",
-                            metadata={
-                                "extracted_prompt": extracted_prompt,
-                                "extracted_model": extracted_model,
-                                "request_url": request_data.url,
-                                "request_method": request_data.method,
-                                "workflow_step": "prune_schema",
-                                "function_name": "PruneSchema",
-                                "has_prompt_content": bool(extracted_prompt),
-                            }
-                        )
-                        
-                except Exception as baml_metadata_error:
-                    logger.warning(f"Failed to extract BAML metadata: {baml_metadata_error}")
-                    # Fallback to basic metadata
-                    opik_context.update_current_span(
-                        name="pruned_schema",
-                        metadata={
-                            "extracted_prompt": extracted_prompt,
-                            "extracted_model": extracted_model,
-                            "request_url": request_data.url,
-                            "request_method": request_data.method,
-                            "workflow_step": "prune_schema",
-                            "function_name": "PruneSchema",
-                            "has_prompt_content": bool(extracted_prompt),
-                        }
-                    )
-                
-        except Exception as e:
-            logger.warning(f"Failed to extract prune schema request data: {e}")
-
     pruned_schema_xml = kuzu_db_manager.get_schema_xml(pruned_schema.model_dump())
     logger.info("Generated pruned schema XML")
-    
-    # Store the extracted prompt in function-specific dataset (after pruned_schema_xml is created)
-    if baml_collector and extracted_prompt:
-        try:
-            await store_prompt_in_function_dataset(
-                "PruneSchema",
-                question,
-                pruned_schema_xml,  # Use the pruned schema XML as answer
-                extracted_prompt,
-                extracted_model,
-                {
-                    "request_url": request_data.url,
-                    "request_method": request_data.method,
-                    "workflow_step": "prune_schema",
-                    "baml_type_name": "PrunedSchema",
-                    "has_structured_metadata": True
-                }
-            )
-        except Exception as e:
-            logger.warning(f"Failed to store prune schema prompt in function-specific dataset: {e}")
     
     return pruned_schema_xml
 
@@ -310,49 +203,6 @@ async def answer_question(question: str, context: str) -> str:
         context,
         return_collector=True
     )
-    
-    # Extract request data for prompt optimization
-    if baml_collector:
-        try:
-            # Extract request data from the BAML collector
-            request_data = extract_request_from_collector(baml_collector, "AnswerQuestion")
-            
-            if request_data:
-                # Extract prompt and model information
-                extracted_prompt = get_prompt_from_request(request_data)
-                extracted_model = get_model_from_request(request_data)
-                
-                logger.info(f"Extracted answer question request data: model={extracted_model}, prompt_length={len(extracted_prompt) if extracted_prompt else 0}")
-                
-                # Update Opik context with the extracted prompt
-                if extracted_prompt:
-                    opik_context.update_current_span(
-                        name="answer_question",
-                        metadata={
-                            "extracted_prompt": extracted_prompt,
-                            "extracted_model": extracted_model,
-                            "request_url": request_data.url,
-                            "request_method": request_data.method,
-                        }
-                    )
-                
-                # Store the extracted prompt in function-specific dataset
-                if extracted_prompt:
-                    await store_prompt_in_function_dataset(
-                        "AnswerQuestion",
-                        question,
-                        answer,  # Use the answer as the result
-                        extracted_prompt,
-                        extracted_model,
-                        {
-                            "request_url": request_data.url,
-                            "request_method": request_data.method,
-                            "workflow_step": "answer_question"
-                        }
-                    )
-                
-        except Exception as e:
-            logger.warning(f"Failed to extract answer question request data: {e}")
     
     return answer
 
@@ -380,51 +230,6 @@ async def execute_graph_rag(question: str, schema_xml: str, important_entities: 
         logger.warning("No Cypher query was generated from the given question and schema")
         result = ""
         query = ""
-    
-    # Extract request data for prompt optimization
-    if baml_collector:
-        try:
-            # Extract request data from the BAML collector
-            request_data = extract_request_from_collector(baml_collector, "Text2Cypher")
-            
-            if request_data:
-                # Extract prompt and model information
-                extracted_prompt = get_prompt_from_request(request_data)
-                extracted_model = get_model_from_request(request_data)
-                
-                logger.info(f"Extracted graph RAG request data: model={extracted_model}, prompt_length={len(extracted_prompt) if extracted_prompt else 0}")
-                
-                # Update Opik context with the extracted prompt
-                if extracted_prompt:
-                    opik_context.update_current_span(
-                        name="execute_graph_rag",
-                        metadata={
-                            "extracted_prompt": extracted_prompt,
-                            "extracted_model": extracted_model,
-                            "request_url": request_data.url,
-                            "request_method": request_data.method,
-                        }
-                    )
-                
-                # Store the extracted prompt in function-specific dataset
-                if extracted_prompt:
-                    await store_prompt_in_function_dataset(
-                        "Text2Cypher",
-                        question,
-                        str(result) if result else "",  # Use the query result as answer
-                        extracted_prompt,
-                        extracted_model,
-                        {
-                            "request_url": request_data.url,
-                            "request_method": request_data.method,
-                            "workflow_step": "execute_graph_rag",
-                            "cypher_generated": bool(response_cypher.cypher),
-                            "result_count": len(result) if result else 0
-                        }
-                    )
-                
-        except Exception as e:
-            logger.warning(f"Failed to extract graph RAG request data: {e}")
     
     context = dedent(
         f"""
@@ -522,119 +327,21 @@ async def extract_entity_keywords(question: str, pruned_schema_xml: str):
         return_collector=True
     )
 
-    # Extract request data for prompt optimization with full BAML metadata
-    if baml_collector:
-        try:
-            # Extract request data from the BAML collector
-            request_data = extract_request_from_collector(baml_collector, "ExtractEntityKeywords")
-            
-            if request_data:
-                # Extract prompt and model information
-                extracted_prompt = get_prompt_from_request(request_data)
-                extracted_model = get_model_from_request(request_data)
-                
-                logger.info(f"Extracted entity keywords request data: model={extracted_model}, prompt_length={len(extracted_prompt) if extracted_prompt else 0}")
-                
-                # Get full BAML metadata with field descriptions and structured analysis
-                try:
-                    # Get the BAML type class for ExtractEntityKeywords
-                    baml_type_class = getattr(baml_types, "EntityKeywords", None)
-                    
-                    if baml_type_class and hasattr(entities, '__iter__'):
-                        # Create structured metadata with BAML field descriptions
-                        baml_metadata = create_span_metadata_with_baml_info(
-                            entities,  # Use the entities result
-                            baml_type_class,
-                            additional_metadata={
-                                "extracted_prompt": extracted_prompt,
-                                "extracted_model": extracted_model,
-                                "request_url": request_data.url,
-                                "request_method": request_data.method,
-                                "workflow_step": "extract_entity_keywords",
-                                "function_name": "ExtractEntityKeywords",
-                                "has_prompt_content": bool(extracted_prompt),
-                            }
-                        )
-                        
-                        # Update Opik context with full BAML metadata
-                        opik_context.update_current_span(
-                            name="extract_entity_keywords",
-                            metadata=baml_metadata
-                        )
-                        
-                        logger.info(f"Added full BAML metadata with {len(baml_metadata)} fields")
-                        
-                    else:
-                        # Fallback to basic metadata if BAML type class not found
-                        opik_context.update_current_span(
-                            name="extract_entity_keywords",
-                            metadata={
-                                "extracted_prompt": extracted_prompt,
-                                "extracted_model": extracted_model,
-                                "request_url": request_data.url,
-                                "request_method": request_data.method,
-                                "workflow_step": "extract_entity_keywords",
-                                "function_name": "ExtractEntityKeywords",
-                                "has_prompt_content": bool(extracted_prompt),
-                            }
-                        )
-                        
-                except Exception as baml_metadata_error:
-                    logger.warning(f"Failed to extract BAML metadata: {baml_metadata_error}")
-                    # Fallback to basic metadata
-                    opik_context.update_current_span(
-                        name="extract_entity_keywords",
-                        metadata={
-                            "extracted_prompt": extracted_prompt,
-                            "extracted_model": extracted_model,
-                            "request_url": request_data.url,
-                            "request_method": request_data.method,
-                            "workflow_step": "extract_entity_keywords",
-                            "function_name": "ExtractEntityKeywords",
-                            "has_prompt_content": bool(extracted_prompt),
-                        }
-                    )
-                
-                # Store the extracted prompt in function-specific dataset
-                if extracted_prompt:
-                    await store_prompt_in_function_dataset(
-                        "ExtractEntityKeywords",
-                        question,
-                        str(entities),  # Convert entities to string for answer
-                        extracted_prompt,
-                        extracted_model,
-                        {
-                            "request_url": request_data.url,
-                            "request_method": request_data.method,
-                            "workflow_step": "extract_entity_keywords",
-                            "baml_type_name": "EntityKeywords",
-                            "has_structured_metadata": True
-                        }
-                    )
-                
-        except Exception as e:
-            logger.warning(f"Failed to extract entity keywords request data: {e}")
-
     # Convert entities to a string representation for metrics
     entities_str = "\n".join([f"- key: {entity.key}\n  value: {entity.value}" for entity in entities])
     
-    # Use Opik Contains metric to check if the question contains the extracted entities
-    await run_post_call_metrics(
-        "extract_entity_keywords_collector",
-        "extract_entity_keywords",
-        input=question,
-        output=question,  # The question is what we're checking
-        context=[pruned_schema_xml],
-        metrics=[
-            {"type": "Contains", "params": {"output": question, "reference": entities_str}}
-        ]
-    )
+    # Debug: Log the entities being checked
+    logger.info(f"Checking Contains metric for entities: {entities_str}")
+    
+    # Store entities for later use in Contains metric
+    # The Contains metric will be run along with other metrics in synthesize_answers
+    logger.info(f"Extracted {len(entities)} entities for Contains metric evaluation")
 
     return entities
 
 
 @opik.track(flush=True)
-async def run_hybrid_rag(question: str, question_number: int = None) -> tuple[str, str]:
+async def run_hybrid_rag(question: str, question_number: int = None) -> tuple[str, str, list]:
     logger.info(f"---\nQuestion {question_number}: {question}")
     
     # Apply input guardrails if enabled
@@ -692,34 +399,13 @@ async def run_hybrid_rag(question: str, question_number: int = None) -> tuple[st
         },
     )
     
-    return vector_answer, graph_answer
+    return vector_answer, graph_answer, entities
 
 
 @opik.track(flush=True)
-async def synthesize_answers(question: str, vector_answer: str, graph_answer: str, question_number: int = None) -> str:
+async def synthesize_answers(question: str, vector_answer: str, graph_answer: str, entities: list = None, question_number: int = None) -> str:
     # Import opik_context at the beginning to avoid UnboundLocalError
     from opik import opik_context
-    
-    # Simple manual comparison of vector and graph answers
-    if vector_answer and graph_answer:
-        # Basic consistency check
-        vector_words = set(vector_answer.lower().split())
-        graph_words = set(graph_answer.lower().split())
-        common_words = vector_words.intersection(graph_words)
-        similarity = len(common_words) / max(len(vector_words), len(graph_words)) if max(len(vector_words), len(graph_words)) > 0 else 0
-        
-        logger.info(f"Simple similarity score: {similarity:.3f}")
-        
-        # Update Opik context with simple comparison
-        opik_context.update_current_span(
-            name="simple_answer_comparison",
-            metadata={
-                "vector_answer_length": len(vector_answer),
-                "graph_answer_length": len(graph_answer),
-                "simple_similarity_score": similarity,
-                "common_words_count": len(common_words),
-            }
-        )
     
     prompt_data, baml_collector = await track_baml_call(
         b.OptimizedSynthesizeAnswers,
@@ -866,19 +552,34 @@ async def synthesize_answers(question: str, vector_answer: str, graph_answer: st
             logger.warning(f"Output guardrail validation failed: {e}")
     
     # Run metrics after the BAML call completes
+    metrics_list = [
+        {"type": "Hallucination", "params": {"model": "openrouter/openai/gpt-4o"}},
+        {"type": "AnswerRelevance", "params": {"model": "openrouter/openai/gpt-4o"}},
+        {"type": "Moderation", "params": {"model": "openrouter/openai/gpt-4o"}},
+        {"type": "Usefulness", "params": {"model": "openrouter/openai/gpt-4o"}},
+    ]
+    
+    # Add Contains metric if entities are provided
+    if entities:
+        entities_str = "\n".join([f"- key: {entity.key}\n  value: {entity.value}" for entity in entities])
+        metrics_list.append({
+            "type": "Contains", 
+            "params": {
+                "reference": entities_str
+            }
+        })
+        logger.info(f"Added Contains metric with {len(entities)} entities")
+    
     await run_post_call_metrics(
         "synthesize_answers_collector",
         "synthesize_answers",
         input=question,
         output=synthesized_answer,
         context=[graph_answer + vector_answer],
-        metrics=[
-            {"type": "Hallucination", "params": {"model": "openrouter/openai/gpt-4o"}},
-            {"type": "AnswerRelevance", "params": {"model": "openrouter/openai/gpt-4o"}},
-            {"type": "Moderation", "params": {"model": "openrouter/openai/gpt-4o"}},
-            {"type": "Usefulness", "params": {"model": "openrouter/openai/gpt-4o"}},
-        ]
+        metrics=metrics_list
     )
+    
+
     
     return synthesized_answer
 
@@ -887,29 +588,8 @@ async def synthesize_answers(question: str, vector_answer: str, graph_answer: st
 @opik.track(flush=True)
 async def generate_response(question: str, question_number: int = None) -> str | None:
     """Generate response for individual calls (UI or evaluation) with prompt optimization."""
-    vector_answer, graph_answer = await run_hybrid_rag(question, question_number)
-    synthesized_answer = await synthesize_answers(question, vector_answer, graph_answer, question_number)
-    
-    # Process extracted prompts for optimization (for both UI and evaluation calls)
-    if extracted_prompts:
-        logger.info(f"Function-specific datasets created for {len(extracted_prompts)} BAML functions:")
-        for function_name, prompts in extracted_prompts.items():
-            dataset_name = f"self_optimizing_agents_optimization_{function_name.lower()}"
-            logger.info(f"  - {dataset_name}: {len(prompts)} prompts")
-        
-        # Clear the extracted prompts for the next question
-        extracted_prompts.clear()
-    
-    # Create a summary of all extracted prompts
-    prompt_summary = {}
-    if extracted_prompts:
-        for function_name, prompts in extracted_prompts.items():
-            prompt_summary[function_name] = {
-                "count": len(prompts),
-                "total_length": sum(len(p["prompt"]) for p in prompts if p["prompt"]),
-                "models": list(set(p["model"] for p in prompts if p["model"])),
-                "sample_prompt": prompts[0]["prompt"][:100] + "..." if prompts and prompts[0]["prompt"] else None
-            }
+    vector_answer, graph_answer, entities = await run_hybrid_rag(question, question_number)
+    synthesized_answer = await synthesize_answers(question, vector_answer, graph_answer, entities, question_number)
     
     # Update the current span with question-specific information
     span_name = f"Question {question_number}" if question_number else "Question"
@@ -924,9 +604,6 @@ async def generate_response(question: str, question_number: int = None) -> str |
             "synthesized_answer_length": len(synthesized_answer),
             "has_vector_answer": bool(vector_answer),
             "has_graph_answer": bool(graph_answer),
-            "extracted_prompts_count": sum(len(prompts) for prompts in extracted_prompts.values()) if extracted_prompts else 0,
-            "prompt_extraction_summary": prompt_summary,
-            "all_extracted_prompts": extracted_prompts,  # Include all extracted prompts in the final span
         },
     )
     
@@ -965,10 +642,10 @@ async def generate_ui_response_with_details(question: str) -> tuple[str | None, 
     )
     
     # Get vector and graph answers
-    vector_answer, graph_answer = await run_hybrid_rag(question, question_number=None)
+    vector_answer, graph_answer, entities = await run_hybrid_rag(question, question_number=None)
     
     # Synthesize the final answer
-    synthesized_answer = await synthesize_answers(question, vector_answer, graph_answer, question_number=None)
+    synthesized_answer = await synthesize_answers(question, vector_answer, graph_answer, entities, question_number=None)
     
     return synthesized_answer, vector_answer, graph_answer
 
