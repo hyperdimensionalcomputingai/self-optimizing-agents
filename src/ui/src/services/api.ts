@@ -1,4 +1,4 @@
-import { QueryRequest, QueryResponse } from '../types';
+import { QueryRequest, QueryResponse, FeedbackRequest } from '../types';
 
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8001';
 
@@ -19,4 +19,18 @@ export const queryAPI = async (message: string): Promise<QueryResponse> => {
 
   const data: QueryResponse = await response.json();
   return data;
+};
+
+export const submitFeedback = async (feedbackData: FeedbackRequest): Promise<void> => {
+  const response = await fetch(`${API_BASE_URL}/feedback`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(feedbackData),
+  });
+
+  if (!response.ok) {
+    throw new Error(`HTTP error! status: ${response.status}`);
+  }
 };

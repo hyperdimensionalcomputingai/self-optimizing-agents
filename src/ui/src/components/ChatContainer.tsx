@@ -44,15 +44,20 @@ const ChatContainer: React.FC<ChatContainerProps> = ({ onDebugDataUpdate }) => {
         text: response.response,
         isUser: false,
         timestamp: new Date(),
+        traceId: response.trace_id,
+        spanId: response.span_id,
       };
 
       setMessages(prev => [...prev, botMessage]);
     } catch (error) {
+      // For debugging: Create an error message with mock trace ID to test feedback buttons
       const errorMessage: Message = {
         id: (Date.now() + 1).toString(),
-        text: 'Sorry, there was an error processing your request.',
+        text: 'Sorry, there was an error processing your request. (This is a test message to demonstrate feedback buttons - try clicking the thumbs up/down below!)',
         isUser: false,
         timestamp: new Date(),
+        traceId: `test-trace-${Date.now()}`,
+        spanId: `test-span-${Date.now()}`,
       };
 
       setMessages(prev => [...prev, errorMessage]);

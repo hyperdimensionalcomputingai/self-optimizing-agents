@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import ChatContainer from './components/ChatContainer';
 import DebugSidebar from './components/DebugSidebar';
+import FeedbackTest from './components/FeedbackTest';
 import './App.css';
 
 type SidebarType = 'debug' | null;

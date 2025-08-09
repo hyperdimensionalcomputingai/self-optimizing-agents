@@ -8,6 +8,8 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel
 import uvicorn
 from dotenv import load_dotenv
+import opik
+from opik import opik_context
 
 from baml_client.async_client import b
 from self_optimizing_agents import (
@@ -47,10 +49,40 @@ class QueryResponse(BaseModel):
     response: str
     vector_answer: Optional[str] = None
     graph_answer: Optional[str] = None
+    trace_id: Optional[str] = None
+    span_id: Optional[str] = None
     # graph_data removed - no longer providing graph visualization
+
+class FeedbackRequest(BaseModel):
+    trace_id: Optional[str] = None
+    span_id: Optional[str] = None
+    feedback_type: str  # 'thumbs_up' or 'thumbs_down'
+    reason: Optional[str] = None
 
 # Initialize database manager
 kuzu_db_manager = KuzuDatabaseManager("fhir_db.kuzu")
+
+def get_current_trace_and_span_ids():
+    """Helper function to extract trace and span IDs from current Opik context."""
+    try:
+        # Get current trace data
+        trace_data = opik_context.get_current_trace_data()
+        if trace_data and hasattr(trace_data, 'id'):
+            trace_id = trace_data.id
+        else:
+            trace_id = None
+        
+        # Get current span data  
+        span_data = opik_context.get_current_span_data()
+        if span_data and hasattr(span_data, 'id'):
+            span_id = span_data.id
+        else:
+            span_id = None
+            
+        return trace_id, span_id
+    except Exception as e:
+        print(f"Error getting trace/span IDs: {e}")
+        return None, None
 
 # Mount static files for React app
 if os.path.exists("ui/build"):
@@ -87,12 +119,17 @@ async def query_endpoint(request: QueryRequest):
         print(f"DEBUG: vector_answer: {type(vector_answer)} = {vector_answer}")
         print(f"DEBUG: graph_answer: {type(graph_answer)} = {graph_answer}")
         
+        # Get current trace and span IDs for feedback functionality
+        trace_id, span_id = get_current_trace_and_span_ids()
+        print(f"DEBUG: trace_id: {trace_id}, span_id: {span_id}")
+        
         # For UI calls, we return the synthesized answer along with vector and graph answers
         response = QueryResponse(
             response=synthesized_answer or "No answer generated",
             vector_answer=vector_answer,
             graph_answer=graph_answer,
-            graph_data=None  # No longer providing graph data
+            trace_id=trace_id,
+            span_id=span_id
         )
         
         print(f"DEBUG: Returning response: {response}")
@@ -108,6 +145,85 @@ async def query_endpoint(request: QueryRequest):
 async def health_check():
     """Health check endpoint"""
     return {"status": "healthy", "service": "Self-Optimizing Agents API"}
+
+def is_valid_uuid(uuid_string):
+    """Check if a string is a valid UUID format."""
+    import re
+    uuid_pattern = re.compile(r'^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$', re.IGNORECASE)
+    return bool(uuid_pattern.match(uuid_string))
+
+@app.post("/feedback")
+async def feedback_endpoint(request: FeedbackRequest):
+    """Endpoint to record user feedback for traces and spans in Opik"""
+    try:
+        print(f"DEBUG: Received feedback: {request}")
+        
+        # Validate feedback type
+        if request.feedback_type not in ['thumbs_up', 'thumbs_down']:
+            raise HTTPException(status_code=400, detail="Invalid feedback_type. Must be 'thumbs_up' or 'thumbs_down'")
+        
+        # Skip Opik logging for mock/development IDs that don't match UUID format
+        skip_opik_logging = False
+        if request.trace_id and not is_valid_uuid(request.trace_id):
+            print(f"DEBUG: Skipping Opik logging for non-UUID trace ID: {request.trace_id}")
+            skip_opik_logging = True
+        if request.span_id and not is_valid_uuid(request.span_id):
+            print(f"DEBUG: Skipping Opik logging for non-UUID span ID: {request.span_id}")
+            skip_opik_logging = True
+        
+        if not skip_opik_logging:
+            # Create Opik client for logging feedback
+            opik_client = opik.Opik()
+            
+            # Convert feedback to binary score (0 for thumbs_up/good, 1 for thumbs_down/bad)
+            # Note: Following user requirement where 0 = good, 1 = bad
+            score_value = 0.0 if request.feedback_type == 'thumbs_up' else 1.0
+            
+            # Prepare feedback score
+            feedback_score = {
+                "name": "overall_quality",
+                "value": score_value,
+                "reason": request.reason
+            }
+            
+            # Log feedback to trace if trace_id is provided
+            if request.trace_id:
+                try:
+                    opik_client.log_traces_feedback_scores(
+                        scores=[{
+                            "id": request.trace_id,
+                            **feedback_score
+                        }]
+                    )
+                    print(f"DEBUG: Logged feedback to trace {request.trace_id}")
+                except Exception as trace_error:
+                    print(f"WARNING: Failed to log feedback to trace {request.trace_id}: {trace_error}")
+            
+            # Log feedback to span if span_id is provided
+            if request.span_id:
+                try:
+                    opik_client.log_spans_feedback_scores(
+                        scores=[{
+                            "id": request.span_id,
+                            **feedback_score
+                        }]
+                    )
+                    print(f"DEBUG: Logged feedback to span {request.span_id}")
+                except Exception as span_error:
+                    print(f"WARNING: Failed to log feedback to span {request.span_id}: {span_error}")
+        else:
+            print(f"DEBUG: Development mode - feedback recorded locally but not sent to Opik")
+        
+        if not request.trace_id and not request.span_id:
+            raise HTTPException(status_code=400, detail="Either trace_id or span_id must be provided")
+        
+        return {"status": "success", "message": "Feedback recorded successfully"}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"ERROR: Exception in feedback_endpoint: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.post("/query-detailed", response_model=QueryResponse)
