@@ -46,7 +46,8 @@ OPIK_WORKSPACE = os.environ.get("OPIK_WORKSPACE")
 OPIK_PROJECT_NAME = os.environ.get("OPIK_PROJECT_NAME", "ODSC-RAG")  # Default to ODSC-RAG if not set
 
 # Set a reasonable sample rate for metrics to avoid overwhelming the system
-os.environ["METRICS_SAMPLE_RATE"] = os.environ.get("METRICS_SAMPLE_RATE", "0.05")  # Default to 5% if not set
+# ⚠️ CRITICAL: Sample rate affects Contains metric reporting - DO NOT SET TOO LOW
+os.environ["METRICS_SAMPLE_RATE"] = os.environ.get("METRICS_SAMPLE_RATE", "1.0")  # Default to 100% for development/testing
 
 # Configure BAML logging
 os.environ["BAML_LOG"] = "OFF"

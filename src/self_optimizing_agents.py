@@ -50,7 +50,8 @@ OPIK_PROJECT_NAME = os.environ.get("OPIK_PROJECT_NAME", "ODSC-RAG")  # Default t
 logger = get_logger(__name__)
 
 # Set a reasonable sample rate for metrics to avoid overwhelming the system
-os.environ["METRICS_SAMPLE_RATE"] = os.environ.get("METRICS_SAMPLE_RATE", "0.05")  # Default to 5% if not set
+# ⚠️ CRITICAL: Sample rate affects Contains metric reporting - DO NOT SET TOO LOW
+os.environ["METRICS_SAMPLE_RATE"] = os.environ.get("METRICS_SAMPLE_RATE", "1.0")  # Default to 100% for development/testing
 
 # Configure BAML logging
 os.environ["BAML_LOG"] = "OFF"
@@ -327,15 +328,32 @@ async def extract_entity_keywords(question: str, pruned_schema_xml: str):
         return_collector=True
     )
 
-    # Convert entities to a string representation for metrics
-    entities_str = "\n".join([f"- key: {entity.key}\n  value: {entity.value}" for entity in entities])
+    # Convert entities to a simple string of values for metrics
+    # Use individual entity values to check if each one is contained in the question
+    entity_values = " ".join([entity.value for entity in entities])
     
-    # Debug: Log the entities being checked
-    logger.info(f"Checking Contains metric for entities: {entities_str}")
+    # Debug: Print extracted entities
+    print(f"[DEBUG] Extracted entities: {[f'{entity.key}:{entity.value}' for entity in entities]}")
+    print(f"[DEBUG] Entity values for Contains metric: '{entity_values}'")
+    
+    # Check if any individual entity values are found in the question
+    found_entities = []
+    for entity in entities:
+        if entity.value.lower() in question.lower():
+            found_entities.append(entity.value)
+    
+    print(f"[DEBUG] Found entities in question: {found_entities}")
+    
+    # Use the found entities for the Contains metric
+    if found_entities:
+        entity_values = " ".join(found_entities)
+        print(f"[DEBUG] Using found entities for Contains metric: '{entity_values}'")
+    else:
+        print(f"[DEBUG] No entities found in question, using all entities: '{entity_values}'")
     
     # Store entities for later use in Contains metric
     # The Contains metric will be run along with other metrics in synthesize_answers
-    logger.info(f"Extracted {len(entities)} entities for Contains metric evaluation")
+    print(f"[DEBUG] Extracted {len(entities)} entities for Contains metric evaluation")
 
     return entities
 
@@ -568,7 +586,7 @@ async def synthesize_answers(question: str, vector_answer: str, graph_answer: st
                 "reference": entities_str
             }
         })
-        logger.info(f"Added Contains metric with {len(entities)} entities")
+        print(f"[DEBUG] Added Contains metric with {len(entities)} entities")
     
     await run_post_call_metrics(
         "synthesize_answers_collector",
@@ -628,8 +646,8 @@ async def generate_ui_response(question: str) -> str | None:
     return await generate_response(question, question_number=None)
 
 @opik.track(flush=True)
-async def generate_ui_response_with_details(question: str) -> tuple[str | None, str, str]:
-    """Generate response with vector and graph answers for UI calls."""
+async def generate_ui_response_with_details(question: str) -> tuple[str | None, str, str, str | None, str | None]:
+    """Generate response with vector and graph answers for UI calls, including trace/span IDs for feedback."""
     # Create a trace for UI calls
     opik_context.update_current_trace(
         name="UI Query with Details",
@@ -647,7 +665,23 @@ async def generate_ui_response_with_details(question: str) -> tuple[str | None, 
     # Synthesize the final answer
     synthesized_answer = await synthesize_answers(question, vector_answer, graph_answer, entities, question_number=None)
     
-    return synthesized_answer, vector_answer, graph_answer
+    # CRITICAL: Extract trace and span IDs while Opik context is still active
+    try:
+        # Get current trace data
+        trace_data = opik_context.get_current_trace_data()
+        trace_id = trace_data.id if trace_data and hasattr(trace_data, 'id') else None
+        
+        # Get current span data  
+        span_data = opik_context.get_current_span_data()
+        span_id = span_data.id if span_data and hasattr(span_data, 'id') else None
+        
+        logger.info(f"🔗 Extracted IDs within Opik context: trace_id={trace_id}, span_id={span_id}")
+        
+    except Exception as e:
+        logger.warning(f"Failed to extract trace/span IDs from Opik context: {e}")
+        trace_id, span_id = None, None
+    
+    return synthesized_answer, vector_answer, graph_answer, trace_id, span_id
 
 
 

@@ -136,11 +136,19 @@ class BAMLInstrumentation:
                     metric = AnswerRelevance(track = True, model=model, **{k: v for k, v in params.items() if k != "model"})
                     score_result = await metric.ascore(input=input, output=output, context=context)
                 elif metric_type == "Contains":
+                    print(f"[DEBUG] Executing Contains metric...")
+                    print(f"[DEBUG] Reference (first 100 chars): {params.get('reference', '')[:100]}")
+                    print(f"[DEBUG] Output (first 100 chars): {output[:100]}")
                     # Filter out 'output' and 'reference' from params as they're not constructor parameters
                     constructor_params = {k: v for k, v in params.items() if k not in ["output", "reference"]}
                     metric = Contains(track = True, **constructor_params)
                     reference = params.get("reference", "")
                     score_result = await metric.ascore(output=output, reference=reference)
+                    print(f"[DEBUG] Contains metric result: {score_result}")
+                    if hasattr(score_result, 'value'):
+                        print(f"[DEBUG] Contains metric score: {score_result.value}")
+                    else:
+                        print(f"[DEBUG] Contains metric direct result: {score_result}")
                 elif metric_type == "Moderation":
                     # Extract model parameter from params or use default
                     model = params.get("model", "openrouter/openai/gpt-4o")
