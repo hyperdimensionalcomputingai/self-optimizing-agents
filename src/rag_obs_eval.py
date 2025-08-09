@@ -281,43 +281,15 @@ async def extract_entity_keywords(question: str, pruned_schema_xml: str):
     else:
         print(f"[DEBUG] No entities found in question, using all entities: '{entity_values}'")
     
-    # Run Contains metric using the same pipeline as other metrics
-    try:
-        from baml_instrumentation import run_post_call_metrics
-        
-        # Run the Contains metric through the same pipeline as other metrics
-        await run_post_call_metrics(
-            "extract_entity_keywords_collector",
-            "extract_entity_keywords",
-            input="",  # No input needed for Contains metric
-            output=question,
-            context=None,
-            metrics=[
-                {
-                    "type": "Contains", 
-                    "params": {
-                        "reference": entity_values
-                    }
-                }
-            ],
-            sample_rate=1.0,  # Always run this metric
-            additional_metadata={
-                "entity_values": entity_values,
-                "found_entities": found_entities,
-                "all_entities": all_entities
-            }
-        )
-        
-        print(f"[DEBUG] Contains metric processed through standard pipeline")
-        
-    except Exception as e:
-        print(f"[WARNING] Failed to run Contains metric: {e}")
+    # Store entities for later use in Contains metric
+    # The Contains metric will be run along with other metrics in synthesize_answers
+    print(f"[DEBUG] Extracted {len(entities)} entities for Contains metric evaluation")
 
     return entities
 
 
 @opik.track(flush=True)
-async def run_hybrid_rag(question: str, question_number: int = None) -> tuple[str, str]:
+async def run_hybrid_rag(question: str, question_number: int = None) -> tuple[str, str, list]:
     print(f"---\nQuestion {question_number}: {question}")
     
     # Apply input guardrails if enabled
@@ -375,11 +347,11 @@ async def run_hybrid_rag(question: str, question_number: int = None) -> tuple[st
         },
     )
     
-    return vector_answer, graph_answer
+    return vector_answer, graph_answer, entities
 
 
 @opik.track(flush=True)
-async def synthesize_answers(question: str, vector_answer: str, graph_answer: str, question_number: int = None) -> str:
+async def synthesize_answers(question: str, vector_answer: str, graph_answer: str, entities: list = None, question_number: int = None) -> str:
     # Use track_baml_call for proper instrumentation
     prompt_data = await track_baml_call(
         b.OptimizedSynthesizeAnswers,
@@ -418,18 +390,31 @@ async def synthesize_answers(question: str, vector_answer: str, graph_answer: st
             print(f"[WARNING] Output guardrail validation failed: {e}")
     
     # Run metrics after the BAML call completes
+    metrics_list = [
+        {"type": "Hallucination", "params": {"model": "openrouter/openai/gpt-4o"}},
+        {"type": "AnswerRelevance", "params": {"model": "openrouter/openai/gpt-4o"}},
+        {"type": "Moderation", "params": {"model": "openrouter/openai/gpt-4o"}},
+        {"type": "Usefulness", "params": {"model": "openrouter/openai/gpt-4o"}},
+    ]
+    
+    # Add Contains metric if entities are provided
+    if entities:
+        entities_str = "\n".join([f"- key: {entity.key}\n  value: {entity.value}" for entity in entities])
+        metrics_list.append({
+            "type": "Contains", 
+            "params": {
+                "reference": entities_str
+            }
+        })
+        print(f"[DEBUG] Added Contains metric with {len(entities)} entities")
+    
     await run_post_call_metrics(
         "synthesize_answers_collector",
         "synthesize_answers",
         input=question,
         output=synthesized_answer,
         context=[graph_answer + vector_answer],
-        metrics=[
-            {"type": "Hallucination", "params": {"model": "openrouter/openai/gpt-4o"}},
-            {"type": "AnswerRelevance", "params": {"model": "openrouter/openai/gpt-4o"}},
-            {"type": "Moderation", "params": {"model": "openrouter/openai/gpt-4o"}},
-            {"type": "Usefulness", "params": {"model": "openrouter/openai/gpt-4o"}},
-        ]
+        metrics=metrics_list
     )
     
     return synthesized_answer
@@ -438,8 +423,8 @@ async def synthesize_answers(question: str, vector_answer: str, graph_answer: st
 # Evaluation Functions
 @opik.track(flush=True)
 async def generate_response(question: str, question_number: int = None) -> str | None:
-    vector_answer, graph_answer = await run_hybrid_rag(question, question_number)
-    synthesized_answer = await synthesize_answers(question, vector_answer, graph_answer, question_number)
+    vector_answer, graph_answer, entities = await run_hybrid_rag(question, question_number)
+    synthesized_answer = await synthesize_answers(question, vector_answer, graph_answer, entities, question_number)
     
 
     
