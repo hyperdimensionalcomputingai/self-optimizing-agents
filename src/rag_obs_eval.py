@@ -9,6 +9,7 @@ https://www.comet.com/site/products/opik/
 """
 
 import asyncio
+import csv
 import os
 from textwrap import dedent
 
@@ -450,21 +451,53 @@ async def generate_response(question: str, question_number: int = None) -> str |
 
 @opik.track(flush=True)
 async def run_evaluation() -> None:
-    """Run the evaluation suite with predefined questions."""
-    questions = [
-        "How many patients with the last name 'Rosenbaum' received multiple immunizations?",
-        "What are the full names of the patients treated by the practitioner named Josef Klein?",
-        "Are there any patiens with the address david@gmail.com?",
-        "Did the practitioner 'Arla Fritsch' treat more than one patient?",
-        "What are the unique categories of substances patients are allergic to?",
-        "How many patients were born in between the years 1990 and 2000?",
-        "How many patients were immunized after January 1, 2022?",
-        "Which practitioner treated the most patients? Return their full name and how many patients they treated.",
-        "Is the patient ID 45 allergic to the substance 'shellfish'? If so, what city and state do they live in, and what is the full name of the practitioner who treated them?",
-        "How many patients are immunized for influenza?",
-        "How many substances cause allergies in the category 'food'?",
-        "Do any patients have the email address 'joseph.klein@example.com'? If so, what is their full name and what is the full name of the practitioner who treated them?",
-    ]
+    """Run the evaluation suite with questions from CSV file."""
+    # Read questions from CSV file
+    questions_file = os.path.join(os.path.dirname(__file__), "questions", "questions.csv")
+    questions = []
+    
+    try:
+        with open(questions_file, 'r', encoding='utf-8') as csvfile:
+            reader = csv.DictReader(csvfile)
+            questions = [row['question'].strip() for row in reader if row['question'] and row['question'].strip()]
+    except FileNotFoundError:
+        print(f"Error: Could not find questions file at {questions_file}")
+        print("Using default questions as fallback...")
+        # Fallback to hardcoded questions if CSV file is not found
+        questions = [
+            "How many patients with the last name 'Rosenbaum' received multiple immunizations?",
+            "What are the full names of the patients treated by the practitioner named Josef Klein?",
+            "Are there any patiens with the address david@gmail.com?",
+            "Did the practitioner 'Arla Fritsch' treat more than one patient?",
+            "What are the unique categories of substances patients are allergic to?",
+            "How many patients were born in between the years 1990 and 2000?",
+            "How many patients were immunized after January 1, 2022?",
+            "Which practitioner treated the most patients? Return their full name and how many patients they treated.",
+            "Is the patient ID 45 allergic to the substance 'shellfish'? If so, what city and state do they live in, and what is the full name of the practitioner who treated them?",
+            "How many patients are immunized for influenza?",
+            "How many substances cause allergies in the category 'food'?",
+            "Do any patients have the email address 'joseph.klein@example.com'? If so, what is their full name and what is the full name of the practitioner who treated them?",
+        ]
+    except Exception as e:
+        print(f"Error reading questions file: {e}")
+        print("Using default questions as fallback...")
+        # Fallback to hardcoded questions if there's any error reading the CSV
+        questions = [
+            "How many patients with the last name 'Rosenbaum' received multiple immunizations?",
+            "What are the full names of the patients treated by the practitioner named Josef Klein?",
+            "Are there any patiens with the address david@gmail.com?",
+            "Did the practitioner 'Arla Fritsch' treat more than one patient?",
+            "What are the unique categories of substances patients are allergic to?",
+            "How many patients were born in between the years 1990 and 2000?",
+            "How many patients were immunized after January 1, 2022?",
+            "Which practitioner treated the most patients? Return their full name and how many patients they treated.",
+            "Is the patient ID 45 allergic to the substance 'shellfish'? If so, what city and state do they live in, and what is the full name of the practitioner who treated them?",
+            "How many patients are immunized for influenza?",
+            "How many substances cause allergies in the category 'food'?",
+            "Do any patients have the email address 'joseph.klein@example.com'? If so, what is their full name and what is the full name of the practitioner who treated them?",
+        ]
+    
+    print(f"Loaded {len(questions)} questions from {'CSV file' if os.path.exists(questions_file) else 'fallback'}")
     
     # Create the top-level trace for the entire evaluation suite
     opik_context.update_current_trace(

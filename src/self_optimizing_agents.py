@@ -572,8 +572,6 @@ async def synthesize_answers(question: str, vector_answer: str, graph_answer: st
     # Run metrics after the BAML call completes
     metrics_list = [
         {"type": "Hallucination", "params": {"model": "openrouter/openai/gpt-4o"}},
-        {"type": "AnswerRelevance", "params": {"model": "openrouter/openai/gpt-4o"}},
-        {"type": "Moderation", "params": {"model": "openrouter/openai/gpt-4o"}},
         {"type": "Usefulness", "params": {"model": "openrouter/openai/gpt-4o"}},
     ]
     

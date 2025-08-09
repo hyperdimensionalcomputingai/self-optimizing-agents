@@ -1,0 +1,119 @@
+question
+Which patients were treated by the practitioner named 'Jon Keeling'? Return their full names.
+List the full names of patients treated by 'Eldora Langosh'.
+Which patients had an encounter with 'Nathanael Rogahn'?
+Which patients were seen by 'Wes King' for immunization?
+Provide the full names of patients treated by 'Houston Funk'.
+Which patients had encounters where 'Sulema Ryan' was the primary performer?
+Who was treated by 'Otha Roberts'? Return full name and city.
+"For each practitioner, how many distinct patients did they treat?"
+Which practitioner treated the most patients? Return their name and count.
+Did 'Jon Keeling' treat more than one patient? Return a boolean and count.
+List all patients’ full names and birthdates (if available).
+Which patients are recorded as female?
+Which patients are recorded as male?
+Which patients have no recorded gender?
+Which patients have a maiden name recorded?
+Which patients are recorded as deceased?
+Which patients have a marital status of 'Married'?
+Which patients are recorded as 'Never Married' or 'Single'?
+Which patients are recorded as 'Widowed'?
+How many patients have no birthdate on record?
+How many patients were born between 1980 and 1990 (inclusive)?
+How many patients were born between 1990 and 2000 (inclusive)?
+"Return patients born after January 1, 2000."
+Which patients have multiple-birth status indicated as false or 'singleton'?
+Which patients’ records indicate a time of death?
+"List patients living in the city of Boston, Massachusetts."
+"How many patients live in Worcester, Massachusetts?"
+"Which patients reside in Lynn, Massachusetts?"
+Which patients have a complete address including postal code?
+Which patients have a missing or null postal code?
+List patients who have a home phone number recorded.
+Which patients have an email recorded (patient or practitioner contact linked)?
+Return the cities with the highest number of patients (top 3).
+List all unique cities represented in patient addresses.
+"For each city, how many distinct patients live there?"
+Which patients’ preferred language is English (United States)?
+Which patients’ preferred language is Spanish?
+How many patients have a recorded preferred language?
+List all unique languages recorded across patients.
+Which practitioners have an email address recorded?
+List encounters with status 'unknown' and the associated patient names.
+Which encounters are classified as 'Ambulatory'?
+Which encounters include participation periods with start and end timestamps?
+Which encounters list the treating practitioner by name?
+"How many encounters were completed at 'Brockton Hospital, Inc.'?"
+Which patient had an ambulatory consultation at 'DR SOLOMON CARTER FULLER MENTAL HEALTH CENTER'?
+"For each practitioner, how many encounters are linked to them?"
+"Which patient had an encounter on October 12, 2022 (any time)?"
+"List encounters that include a location name, along with the patient and date range."
+Which patients received a seasonal influenza vaccine?
+"How many patients received an influenza vaccine after January 1, 2020?"
+"How many patients were immunized after January 1, 2022?"
+List patients with immunizations that are marked 'completed'.
+"Which patients received a diphtheria, pertussis, and tetanus (DPT/DTaP/Tdap) vaccine?"
+List all unique vaccine types recorded in the data.
+"For each vaccine type, how many immunizations are recorded?"
+Return patients who received a 'preservative-free' injectable influenza vaccine.
+Which immunizations have an occurrence date with a timezone offset in the timestamp?
+Which patients have an immunization record but no vaccine traits listed?
+"Which patients have an active, confirmed allergy record?"
+"List the unique categories of allergy (e.g., environment, food, medication) present in the data."
+How many allergies are categorized as 'environment'?
+Which patients have an allergy recorded but no specific substance name provided?
+Return all patients with allergy records along with recorded category and recordedDate.
+Which patients have a recorded condition with clinicalStatus 'active'?
+Which patients have a condition 'Victim of intimate partner abuse (finding)'?
+"List patients with a condition onset before January 1, 2010."
+How many distinct patients have at least one condition recorded?
+Which patients have a condition recorded but no code details (null code)?
+Which patients have a recorded body height value? Return name and height.
+Which patients have a body weight observation recorded?
+List patients with a triglycerides value and return the numeric result.
+Which patients have an MCHC result recorded? Return value and units.
+Which patients have a 'Tobacco smoking status' observation?
+How many patients have social history observations related to PRAPARE components?
+Which PRAPARE components indicate 'Yes' or 'No' for safety/housing questions for a given patient?
+Which patients have a PHQ‑2 total score recorded? Return score and date.
+List patients with any observation where effectiveDateTime is 2023-04-05.
+Which patients have a 'Head Occipital-frontal circumference Percentile' observation recorded?
+"For each observation code, count the number of associated patients."
+"Which observations include a numeric Quantity value? Return patient, code, value, and units."
+"Which observations are present but missing value fields (e.g., null valueQuantity)?"
+"For each practitioner, list the vaccine types administered to their patients."
+"Which patients treated by 'Wes King' received influenza vaccines after January 1, 2022?"
+"Among patients seen by 'Houston Funk', which immunizations or procedures are recorded?"
+Which patients treated by 'Nathanael Rogahn' had encounters in September 2014?
+Return patients linked to 'Otha Roberts' along with the patient’s marital status and city.
+Which patients with an environmental allergy also have any immunization record?
+"How many immunizations occurred before January 1, 2015?"
+How many observations were issued in 2018?
+List encounters that started and ended on the same calendar date.
+How many conditions have onset dates in the year 2014?
+Which patients have any event dated in 2023?
+Which patients are missing a phone number?
+Which patients have an address but no city recorded?
+Which patient records have a postal code of '00000'?
+Which patients have an encounter with status but no type recorded?
+Which immunizations are missing occurrenceDateTime?
+Which conditions are missing verificationStatus?
+Which observations have a status of 'unknown'?
+Which procedures have status 'completed' and which are 'unknown'?
+Which patients have both structured data and a corresponding free-text clinical note?
+Which patient notes reference a facility by name? Return patient and facility name.
+Which city has the most patients in the dataset?
+Which practitioner appears most frequently across encounters?
+Which observation code appears most frequently across patients?
+What is the earliest recorded immunization date and which patient does it belong to?
+What is the latest recorded observation date and which patient does it belong to?
+List the full name and details of the patient 'Mr. Rudolf Nolan Corkery'.
+List the full name and details of the patient 'Mr. Hobert Armand Bashirian'.
+List the full name and details of 'Ms. Sonia María Bañuelos' including immunization.
+"Return details for 'Mr. Asa Sherman Nolan', including date of death and height."
+Return details for 'Mrs. Shanon Wolff' including recent lab observations.
+Return allergy details for 'Mr. Vince Maria Bergnaum'.
+Return encounter and observation highlights for 'Mr. Sheldon Alfonso Reynolds'.
+Return practitioner link and contact for 'Ms. Gail Scarlet Hahn'.
+Return practitioner link and status for 'Mr. Vicente Francisco Ornelas'.
+Return encounter participation details for 'Mrs. Helena Man Nikolaus'.
